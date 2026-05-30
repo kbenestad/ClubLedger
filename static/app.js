@@ -231,14 +231,21 @@ function selectCashierMember(id, name, number, balance, balanceDisplay) {
   document.getElementById('cashierSelected').innerHTML =
     `<strong>${esc(name)}</strong> &nbsp; #${esc(number)} &nbsp; Balance: <span class="${balanceClass(balance)}">${esc(balanceDisplay)}</span>`;
   document.getElementById('cashierForm').classList.remove('hidden');
+  setMsg('cashierTopupMsg', '', '');
+  setMsg('cashierWithdrawalMsg', '', '');
   setMsg('cashierMsg', '', '');
 }
 
 function clearCashierSelection() {
   cashierMember = null;
   document.getElementById('cashierForm').classList.add('hidden');
-  document.getElementById('cashierAmount').value = '';
-  document.getElementById('cashierNote').value   = '';
+  document.getElementById('cashierAmount').value   = '';
+  document.getElementById('cashierNote').value     = '';
+  document.getElementById('withdrawalAmount').value = '';
+  document.getElementById('withdrawalPin').value    = '';
+  document.getElementById('withdrawalNote').value   = '';
+  setMsg('cashierTopupMsg', '', '');
+  setMsg('cashierWithdrawalMsg', '', '');
   setMsg('cashierMsg', '', '');
 }
 
@@ -246,16 +253,37 @@ async function doTopup() {
   if (!cashierMember) return;
   const amount = toMinor('cashierAmount');
   const note   = document.getElementById('cashierNote').value.trim();
-  if (!amount) { setMsg('cashierMsg', 'Enter a valid amount.', 'err'); return; }
+  if (!amount) { setMsg('cashierTopupMsg', 'Enter a valid amount.', 'err'); return; }
   try {
     const r = await apiFetch('/topup', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: cashierMember.id, amount, note: note || null })
     });
     window.open(`/receipt/${r.entry_id}`, '_blank');
-    setMsg('cashierMsg', `Top-up complete. New balance: ${r.new_balance_display}`, 'ok');
-    clearCashierSelection();
-  } catch (err) { setMsg('cashierMsg', err.message, 'err'); }
+    document.getElementById('cashierAmount').value = '';
+    document.getElementById('cashierNote').value = '';
+    setMsg('cashierTopupMsg', `Top-up complete. New balance: ${r.new_balance_display}`, 'ok');
+  } catch (err) { setMsg('cashierTopupMsg', err.message, 'err'); }
+}
+
+async function doWithdrawal() {
+  if (!cashierMember) return;
+  const amount = toMinor('withdrawalAmount');
+  const pin    = document.getElementById('withdrawalPin').value;
+  const note   = document.getElementById('withdrawalNote').value.trim();
+  if (!amount) { setMsg('cashierWithdrawalMsg', 'Enter a valid amount.', 'err'); return; }
+  if (!pin)    { setMsg('cashierWithdrawalMsg', 'PIN is required.', 'err'); return; }
+  try {
+    const r = await apiFetch('/withdrawal', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ member_id: cashierMember.id, amount, pin, note: note || null })
+    });
+    window.open(`/receipt/${r.entry_id}`, '_blank');
+    document.getElementById('withdrawalAmount').value = '';
+    document.getElementById('withdrawalPin').value    = '';
+    document.getElementById('withdrawalNote').value   = '';
+    setMsg('cashierWithdrawalMsg', `Withdrawal complete. New balance: ${r.new_balance_display}`, 'ok');
+  } catch (err) { setMsg('cashierWithdrawalMsg', err.message, 'err'); }
 }
 
 // ---------------------------------------------------------------------------

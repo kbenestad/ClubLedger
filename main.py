@@ -81,7 +81,7 @@ def init_db():
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
                 member_id   INTEGER NOT NULL REFERENCES members(id),
                 amount      INTEGER NOT NULL,
-                type        TEXT NOT NULL CHECK(type IN ('topup','charge')),
+                type        TEXT NOT NULL CHECK(type IN ('topup','charge','withdrawal')),
                 venue       TEXT NOT NULL CHECK(venue IN ('cashier','bar')),
                 note        TEXT,
                 staff_name  TEXT NOT NULL,
@@ -117,11 +117,11 @@ def init_db():
 def migrate_db():
     """Run schema migrations that can't be expressed as CREATE TABLE IF NOT EXISTS."""
     with db_conn() as conn:
+        # --- staff_accounts: add cashier/pos-staff roles ---
         schema = conn.execute(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='staff_accounts'"
         ).fetchone()
         if schema and "'pos-staff'" not in schema["sql"]:
-            # Recreate staff_accounts with new role set; convert 'staff' → 'pos-staff'
             conn.execute("ALTER TABLE staff_accounts RENAME TO _staff_accounts_old")
             conn.execute("""
                 CREATE TABLE staff_accounts (
@@ -143,6 +143,28 @@ def migrate_db():
                     FROM _staff_accounts_old
             """)
             conn.execute("DROP TABLE _staff_accounts_old")
+
+        # --- ledger_entries: add withdrawal type ---
+        le_schema = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='ledger_entries'"
+        ).fetchone()
+        if le_schema and "'withdrawal'" not in le_schema["sql"]:
+            conn.execute("ALTER TABLE ledger_entries RENAME TO _ledger_entries_old")
+            conn.execute("""
+                CREATE TABLE ledger_entries (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    member_id   INTEGER NOT NULL REFERENCES members(id),
+                    amount      INTEGER NOT NULL,
+                    type        TEXT NOT NULL CHECK(type IN ('topup','charge','withdrawal')),
+                    venue       TEXT NOT NULL CHECK(venue IN ('cashier','bar')),
+                    note        TEXT,
+                    staff_name  TEXT NOT NULL,
+                    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+            """)
+            conn.execute("INSERT INTO ledger_entries SELECT * FROM _ledger_entries_old")
+            conn.execute("DROP TABLE _ledger_entries_old")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_ledger_member ON ledger_entries(member_id)")
 
 def seed_admin():
     with db_conn() as conn:
@@ -277,6 +299,12 @@ class TopupRequest(BaseModel):
 class ChargeRequest(BaseModel):
     member_id: int
     amount:    int
+    pin:       str
+    note:      Optional[str] = None
+
+class WithdrawalRequest(BaseModel):
+    member_id: int
+    amount:    int   # minor units
     pin:       str
     note:      Optional[str] = None
 
@@ -491,6 +519,27 @@ def charge(body: ChargeRequest, user: dict = Depends(pos_user)):
         new_bal = member_balance(conn, body.member_id)
         return {"ok": True, "entry_id": eid, "new_balance": new_bal, "new_balance_display": format_amount(new_bal)}
 
+@app.post("/withdrawal")
+def withdrawal(body: WithdrawalRequest, user: dict = Depends(cashier_user)):
+    if body.amount <= 0:
+        raise HTTPException(400, "Amount must be positive")
+    with db_conn() as conn:
+        member = conn.execute("SELECT * FROM members WHERE id=?", (body.member_id,)).fetchone()
+        if not member:
+            raise HTTPException(404, "Member not found")
+        if not verify_pin(body.pin, member["pin_hash"]):
+            raise HTTPException(403, "Incorrect PIN")
+        bal = member_balance(conn, body.member_id)
+        if bal < body.amount:
+            raise HTTPException(400, f"Insufficient balance ({format_amount(bal)})")
+        cur = conn.execute(
+            "INSERT INTO ledger_entries (member_id,amount,type,venue,note,staff_name) VALUES (?,?,?,?,?,?)",
+            (body.member_id, body.amount, "withdrawal", "cashier", body.note, user["name"])
+        )
+        eid = cur.lastrowid
+        new_bal = member_balance(conn, body.member_id)
+        return {"ok": True, "entry_id": eid, "new_balance": new_bal, "new_balance_display": format_amount(new_bal)}
+
 @app.get("/members/{member_id}/transactions")
 def transactions(member_id: int, limit: int = 50, offset: int = 0,
                  user: dict = Depends(current_user)):
@@ -615,7 +664,7 @@ def receipt(entry_id: int):
 
     def fmt(p): return f"{sym}{p/div:.2f}"
 
-    type_label = "Top-up" if entry["type"] == "topup" else "Charge"
+    type_label = {"topup": "Top-up", "charge": "Charge", "withdrawal": "Withdrawal"}.get(entry["type"], entry["type"].capitalize())
     colour = "#080" if entry["type"] == "topup" else "#c00"
 
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">

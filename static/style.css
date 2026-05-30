@@ -137,6 +137,21 @@ nav {
 }
 .selected-member-box strong { font-size: 1.05rem; }
 
+/* ---- Cashier dual-action panels ---- */
+.cashier-action-panel {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.cashier-action-panel h3 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+}
+
 /* ---- Product results ---- */
 .product-results { margin-bottom: 14px; }
 .product-item {
