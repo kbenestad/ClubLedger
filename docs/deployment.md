@@ -384,7 +384,30 @@ To find your local network range: if your server's IP is `192.168.1.42`, your ra
 
 ---
 
-## Part 8 – Security Notes
+## Part 8 – Backing Up Data
+
+All club data is stored in a single SQLite file: `clubledger.db`. To back up:
+
+1. **If the app is stopped:** copy `clubledger.db` to a safe location.
+2. **If the app is running:** SQLite may be in WAL (Write-Ahead Log) mode. Copy all three files if they exist:
+   - `clubledger.db`
+   - `clubledger.db-wal`
+   - `clubledger.db-shm`
+
+   Copy all three together in one operation so the backup is consistent.
+
+3. **Logo file:** if an admin has uploaded a club logo, also copy `static/logo.*` (e.g. `static/logo.png`). The exact extension depends on the file that was uploaded.
+
+**To restore from a backup:**
+
+1. Stop the server.
+2. Replace `clubledger.db` (and `clubledger.db-wal` / `clubledger.db-shm` if present) with the backed-up copies.
+3. Copy any backed-up logo file back to the `static/` folder.
+4. Restart the server.
+
+---
+
+## Part 9 – Security Notes
 
 | Risk | Mitigation |
 |---|---|
@@ -411,3 +434,5 @@ To find your local network range: if your server's IP is `192.168.1.42`, your ra
 | View systemd logs (Linux) | `journalctl -u clubledger -f` |
 | Backup data | Copy `clubledger.db` to a safe location |
 | Verify not internet-accessible | From mobile data: `http://<public-ip>:8000` should time out |
+| Reset admin password | `python manage.py reset-admin` (app can be running) |
+| Wipe database (start fresh) | Stop app first, then `python manage.py reset-db` |

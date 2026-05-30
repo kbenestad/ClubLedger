@@ -7,7 +7,9 @@
 | Backend | Python 3.11+ · FastAPI · SQLite (via stdlib `sqlite3`) |
 | Auth | bcrypt password hashing · in-memory session tokens · httpOnly cookies |
 | Frontend | Vanilla HTML/CSS/JS — no build step, no framework |
-| Dependencies | `fastapi`, `uvicorn[standard]`, `bcrypt` |
+| Dependencies | `fastapi`, `uvicorn[standard]`, `bcrypt`, `python-multipart` |
+
+`python-multipart` is required for file upload support via FastAPI's `UploadFile`.
 
 ---
 
@@ -16,6 +18,7 @@
 ```
 ClubLedger/
 ├── main.py              # Entire backend — one file
+├── manage.py            # CLI for database/admin management (reset-admin, reset-db)
 ├── requirements.txt     # pip dependencies
 ├── run.sh               # Start script (creates venv, installs deps, runs server)
 ├── clubledger.db        # SQLite database (created on first run, git-ignored)
@@ -33,10 +36,11 @@ ClubLedger/
     ├── cashier.html     # Standalone cashier page (/cashier)
     ├── cashier.js
     ├── bar.html         # Standalone bar page (/bar)
-    └── bar.js
+    ├── bar.js
+    └── logo.*           # Uploaded logo file (created when admin uploads a logo; git-ignored)
 ```
 
-`main.py` is intentionally a single file. It stays under ~450 lines because the domain is simple. Split it only if it grows substantially.
+`main.py` is kept as a single file for simplicity. Split it only if it grows substantially.
 
 ---
 
@@ -59,6 +63,20 @@ The default admin account (`admin` / `admin`) is printed to the console on first
 
 ---
 
+## manage.py
+
+The `manage.py` script provides CLI commands for server-side administration. Run it from the project root with the virtual environment active.
+
+### `python manage.py reset-admin`
+
+Interactively resets an admin account password from the terminal. Safe to run while the app is running (SQLite WAL mode). Uses `getpass` so the password is not echoed.
+
+### `python manage.py reset-db`
+
+Wipes `clubledger.db`, `clubledger.db-wal`, and `clubledger.db-shm`. Requires typing `RESET` to confirm. The app must be stopped before running this command.
+
+---
+
 ## Database Schema
 
 ### `members`
@@ -68,6 +86,7 @@ The default admin account (`admin` / `admin`) is printed to the console on first
 | member_number | TEXT UNIQUE | Human-readable ID |
 | name | TEXT | |
 | pin_hash | TEXT | bcrypt hash |
+| overdraft_override | INTEGER | NULL = use global policy; 1 = override allowed; 0 = override blocked |
 | created_at | TEXT | `datetime('now')` UTC |
 
 ### `ledger_entries`
@@ -75,14 +94,16 @@ The default admin account (`admin` / `admin`) is printed to the console on first
 |---|---|---|
 | id | INTEGER PK | |
 | member_id | INTEGER FK | → members.id |
-| amount | INTEGER | Minor currency units (e.g. pence) — always positive |
-| type | TEXT | `topup` or `charge` |
+| amount | INTEGER | Minor currency units — always positive |
+| type | TEXT | `topup`, `charge`, or `withdrawal` |
 | venue | TEXT | `cashier` or `bar` |
 | note | TEXT | Optional free text |
 | staff_name | TEXT | Name of logged-in staff at time of transaction |
+| transfer_type | TEXT | Payment method for top-ups/withdrawals (e.g. "Cash") |
+| transfer_ref | TEXT | Optional payment reference for top-ups/withdrawals |
 | created_at | TEXT | UTC datetime |
 
-Balance is computed on-the-fly: `SUM(topups) - SUM(charges)`. There is no stored balance column — this avoids drift and makes the audit trail self-consistent.
+Balance is computed on-the-fly: `SUM(topups) - SUM(charges) - SUM(withdrawals)`. There is no stored balance column — this avoids drift and makes the audit trail self-consistent.
 
 ### `staff_accounts`
 | Column | Type | Notes |
@@ -91,9 +112,11 @@ Balance is computed on-the-fly: `SUM(topups) - SUM(charges)`. There is no stored
 | name | TEXT | Display name, used as `staff_name` on transactions |
 | username | TEXT UNIQUE | Login credential |
 | password_hash | TEXT | bcrypt hash |
-| role | TEXT | `staff` or `admin` |
+| role | TEXT | `pos-staff`, `cashier`, or `admin` |
 | active | INTEGER | 0 or 1 |
 | created_at | TEXT | |
+
+On startup, any existing rows with `role = 'staff'` are automatically migrated to `role = 'pos-staff'`.
 
 ### `products`
 | Column | Type | Notes |
@@ -131,6 +154,51 @@ format_amount()      ← reads _settings at call time
 /config endpoint     ← returns _settings to the frontend on every page load
 ```
 
+### CONFIG keys
+
+| Key | Default / Notes |
+|---|---|
+| `club_name` | Club display name |
+| `currency_symbol` | e.g. `£` |
+| `currency_major` | e.g. `GBP` |
+| `currency_minor` | e.g. `pence` |
+| `currency_divisor` | e.g. `100` |
+| `overdraft_policy` | `"never"` / `"always"` / `"staff-override"` / `"admin-override"` / `"staff-block"` |
+| `min_topup` | Minimum top-up amount (minor units) |
+| `max_topup` | Maximum top-up amount (minor units) |
+| `max_charge` | Maximum single charge amount (minor units) |
+| `biz_address1` – `biz_address4` | Business address lines |
+| `biz_country` | |
+| `biz_phone` | |
+| `biz_email` | |
+| `biz_website` | |
+| `logo_url` | URL path to uploaded logo (set automatically on upload) |
+| `logo_align` | |
+| `logo_max_width` | Default `200` |
+| `logo_max_height` | Default `80` |
+| `bar_name` | Default `"Bar"` |
+| `cashier_name` | Default `"Cashier"` |
+| `txn_ref_prefix` | Default `"TXN"` |
+| `transfer_types` | Comma-separated string (e.g. `"Bank Transfer,Cash,QR"`); returned as an array by `/config` |
+| `lbl_receipt` | Receipt label keys (14 total — see source for full list) |
+| `lbl_topup_receipt` | |
+| `lbl_withdrawal_receipt` | |
+| `lbl_staff` | |
+| `lbl_transaction` | |
+| `lbl_charge_venue` | |
+| `lbl_txn_time` | |
+| `lbl_amount_charged` | |
+| `lbl_remaining_balance` | |
+| `lbl_balance_transfer` | |
+| `lbl_amount_topup` | |
+| `lbl_amount_withdrawal` | |
+| `lbl_transfer_type` | |
+| `lbl_transfer_ref` | |
+| `receipt_footer` | Footer text for all receipts |
+| `receipt_footer_charge` | Override footer for charge receipts |
+| `receipt_footer_cashier` | Override footer for cashier receipts |
+| `timezone` | IANA timezone name; defaults to server local timezone via `_server_timezone()` |
+
 To add a new configurable value:
 1. Add a default to `CONFIG`
 2. Add the field to the `AppSettingsUpdate` Pydantic model
@@ -142,11 +210,13 @@ To add a new configurable value:
 ## Auth System
 
 - `POST /auth/login` validates credentials against `staff_accounts`, creates a `secrets.token_hex(32)` token, stores it in the module-level `_sessions` dict, and sets it as an `httpOnly` cookie.
-- All protected endpoints use `Depends(current_user)` which reads the cookie and looks up the session.
-- Admin-only endpoints use `Depends(admin_user)` which calls `current_user` then checks `role == "admin"`.
+- All protected endpoints use a `Depends()` guard appropriate to the required role:
+  - `Depends(pos_user)` — allows `pos-staff` and `admin`. Used by bar endpoints.
+  - `Depends(cashier_user)` — allows `cashier` and `admin`. Used by cashier endpoints.
+  - `Depends(admin_user)` — `admin` only.
 - Sessions expire after 8 hours (configurable via `SESSION_TTL` in `main.py`).
 - Sessions are lost on server restart (in-memory). This is intentional for simplicity; upgrade to a DB-backed session store if persistence is needed.
-- Print views (`/receipt/`, `/members/*/statement`) deliberately have **no auth** — they are opened as pop-up tabs from an authenticated page.
+- Print views (`/receipt/`, `/members/*/statement`) have no auth — they are opened as pop-up tabs from an authenticated session.
 
 ---
 
@@ -168,19 +238,20 @@ All endpoints except `/config`, `/auth/login`, and the print views require a val
 |---|---|---|
 | GET | `/members?q=` | List/search. Returns balance per member. |
 | POST | `/members` | `{member_number, name, pin}` |
-| PUT | `/members/{id}` | `{member_number?, name?, pin?}` — all optional |
+| PUT | `/members/{id}` | `{member_number?, name?, pin?, overdraft_override?}` — all optional |
 | DELETE | `/members/{id}` | Blocked if balance ≠ 0 |
 | GET | `/members/{id}/transactions` | `?limit=50&offset=0` |
-| GET | `/members/{id}/statement` | Returns printable HTML |
+| GET | `/members/{id}/statement` | Returns printable HTML. No auth. |
 
 ### Transactions
 
 | Method | Path | Body |
 |---|---|---|
-| POST | `/topup` | `{member_id, amount, note?}` — amount in minor units |
+| POST | `/topup` | `{member_id, amount, transfer_type?, transfer_ref?, note?}` — amount in minor units |
 | POST | `/charge` | `{member_id, amount, pin, note?}` |
+| POST | `/withdrawal` | `{member_id, amount, pin, transfer_type?, transfer_ref?, note?}` |
 
-Both return `{ok, entry_id, new_balance, new_balance_display}`.
+All return `{ok, entry_id, new_balance, new_balance_display}`.
 
 ### Receipts
 
@@ -201,6 +272,7 @@ Both return `{ok, entry_id, new_balance, new_balance_display}`.
 |---|---|---|
 | GET | `/admin/settings` | Admin only |
 | POST | `/admin/settings` | Admin only. Partial update — only sent fields are changed. |
+| POST | `/admin/logo` | Admin only. Multipart file upload. Saves image to `static/logo.<ext>`, updates `logo_url` setting, returns `{url}`. Accepts PNG, JPG, GIF, WebP, SVG. |
 | GET | `/admin/staff-accounts` | Admin only |
 | POST | `/admin/staff-accounts` | `{name, username, password, role}` |
 | PUT | `/admin/staff-accounts/{id}` | All fields optional |
@@ -210,7 +282,7 @@ Both return `{ok, entry_id, new_balance, new_balance_display}`.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/config` | Returns live `_settings`. Called by the frontend on every page load. |
+| GET | `/config` | Returns live `_settings`. Called by the frontend on every page load. `transfer_types` is returned as an array. |
 
 ---
 
@@ -239,7 +311,7 @@ See the Settings System section above.
 ### Adding a new transaction venue
 
 1. Add the new venue value to the `CHECK` constraint in the `ledger_entries` schema — requires a migration or database recreation.
-2. Add a new endpoint (or extend `/topup`/`/charge` with a `venue` parameter).
+2. Add a new endpoint (or extend existing transaction endpoints with a `venue` parameter).
 3. Add a new tab or form in `index.html` / `app.js`.
 
 ### Adding product management UI
@@ -266,5 +338,6 @@ Adjust `current_user()` to query the table instead of the dict.
 
 - The database file `clubledger.db` is created automatically in the working directory on first run. Add it to `.gitignore`.
 - `staff.json` is also created in the working directory. Add to `.gitignore`.
+- `static/logo.*` is created when an admin uploads a logo via the Admin panel. Add to `.gitignore`.
 - No environment variables are required. All configuration is in `CONFIG` (code) or `app_settings` (database).
 - The app binds to `0.0.0.0:8000` by default — accessible from any device on the network. Pass `--host 127.0.0.1` to restrict to localhost only.

@@ -16,6 +16,18 @@ On first startup the system creates a default admin account:
 
 ---
 
+## Roles
+
+ClubLedger has three roles:
+
+| Role | Tabs visible |
+|---|---|
+| **POS Staff** | Members, Bar |
+| **Cashier** | Members, Cashier |
+| **Admin** | Members, Cashier, Bar, Admin |
+
+---
+
 ## Admin Tab
 
 The Admin tab contains two sections: **App Settings** and **Staff Accounts**.
@@ -26,11 +38,12 @@ The Admin tab contains two sections: **App Settings** and **Staff Accounts**.
 
 These settings control how ClubLedger looks and behaves. Changes take effect immediately without restarting the server.
 
-### Club Identity
+### General
 
 | Setting | Description |
 |---|---|
 | **Club Name** | Appears in the navigation bar, on receipts, and on statements |
+| **Timezone** | IANA timezone name (e.g. `Europe/London`, `Asia/Bangkok`). All receipt and statement timestamps are shown in this timezone. Leave blank to use the server's local time. |
 
 ### Currency
 
@@ -55,18 +68,80 @@ All limits are entered in the **major unit** (e.g. pounds).
 | **Maximum top-up** | Cashier cannot top up more than this in a single transaction |
 | **Maximum single charge** | Bar cannot charge more than this in a single transaction |
 
-### Receipt Footer
+### Business Address
 
-Optional text printed at the bottom of every receipt and statement. Useful for:
-- A thank-you message
-- A refund or returns policy
-- Contact details
+These fields populate the business header printed at the top of every receipt and statement. All fields are optional — leave blank to omit.
 
-Accepts plain text. Line breaks are preserved.
+| Field | Description |
+|---|---|
+| **Address Line 1–4** | Street address, city, postcode, etc. |
+| **Country** | Country name or code |
+| **Phone** | Contact phone number |
+| **Email** | Contact email address |
+| **Website** | Contact website URL |
 
-### Allow Negative Balance (Overdraft)
+### Branding
 
-When ticked, the bar can charge a member even if their balance would go below zero. When unticked (the default), charges are blocked if the member has insufficient funds.
+| Setting | Description |
+|---|---|
+| **Logo** | Upload an image file (PNG, JPG, GIF, WebP, or SVG). The file is stored in the `static/` folder of the application. |
+| **Logo URL** | The path used to display the logo — set automatically when you upload. Can also be set manually (e.g. `/static/yourlogo.png`) if you are copying a file directly to the server. |
+| **Logo Alignment** | `Left`, `Centre`, or `Right` — controls where the logo appears in the receipt/statement header |
+| **Logo Max Width** | Maximum display width in pixels (default 200) |
+| **Logo Max Height** | Maximum display height in pixels (default 80) |
+| **Bar Name** | Label used for the bar/POS venue on receipts (default `Bar`) |
+| **Cashier Name** | Label used for the cashier venue on receipts (default `Cashier`) |
+
+### Transactions
+
+| Setting | Description |
+|---|---|
+| **Transaction Reference Prefix** | Prepended to the auto-generated transaction number. For example, `TXN` produces references like `TXN0000001` (default `TXN`). |
+| **Transfer Types** | Comma-separated list of payment methods shown to cashiers in the Transfer Type dropdown on the Cashier tab (e.g. `Bank Transfer,Cash,QR`). |
+
+### Overdraft Policy
+
+Controls whether members are allowed to have a negative balance. The setting is a dropdown with five options:
+
+| Policy | Meaning |
+|---|---|
+| **Never allowed** | No member can ever go into overdraft |
+| **Always allowed** | All members can always go into overdraft |
+| **Staff override** | Staff can tick a per-member checkbox to allow overdraft for that specific member |
+| **Admin override** | Only admins can tick the per-member overdraft checkbox |
+| **Staff block** | Staff can tick a per-member checkbox to block overdraft for a specific member (all others are allowed) |
+
+When the policy is **Staff override**, **Admin override**, or **Staff block**, an **Overdraft override** checkbox appears in the Edit Member modal.
+
+### Receipt Labels
+
+All fields in this section are optional and are provided for localisation. Each field overrides the default label printed on receipts and statements.
+
+| Field | Default |
+|---|---|
+| Receipt title | `RECEIPT` |
+| Top-up receipt title | `TOP-UP RECEIPT` |
+| Withdrawal receipt title | `WITHDRAWAL RECEIPT` |
+| Staff label | `STAFF` |
+| Transaction label | `TRANSACTION` |
+| Charge venue label | `CHARGE` |
+| Transaction time label | `TRANSACTION TIME` |
+| Amount charged label | `AMOUNT CHARGED` |
+| Remaining balance label | `REMAINING BALANCE` |
+| Balance transfer label | `BALANCE TRANSFER` |
+| Amount topped-up label | `AMOUNT TOPPED-UP` |
+| Amount withdrawn label | `AMOUNT WITHDRAWN` |
+| Transfer type label | `TRANSFER TYPE` |
+| Transfer reference label | `TRANSFER REFERENCE` |
+
+### Receipt Footers
+
+Optional text printed at the bottom of receipts. Useful for thank-you messages, refund policies, or contact details. Plain text; line breaks are preserved.
+
+| Field | Appears on |
+|---|---|
+| **Footer — charge receipts** | Bar charge receipts |
+| **Footer — cashier receipts** | Top-up and withdrawal receipts |
 
 ---
 
@@ -78,17 +153,10 @@ Fill in the **Add Account** form at the bottom of the Staff Accounts panel:
 
 | Field | Notes |
 |---|---|
-| Name | The person's real name — appears on receipts and transaction logs |
-| Username | Used to sign in. Lowercase letters and numbers recommended. |
-| Password | Minimum length enforced by the browser. Choose something strong. |
-| Role | **Staff** or **Admin** — see below |
-
-### Roles
-
-| Role | Capabilities |
-|---|---|
-| **Staff** | Members, Cashier, Bar tabs |
-| **Admin** | Everything above, plus the Admin tab (settings and account management) |
+| **Name** | The person's real name — appears on receipts and transaction logs |
+| **Username** | Used to sign in. Lowercase letters and numbers recommended. |
+| **Password** | Choose something strong. |
+| **Role** | **POS Staff**, **Cashier**, or **Admin** — see the Roles section above |
 
 ### Editing an Account
 
@@ -115,9 +183,10 @@ Open the edit modal for their account, enter a new password, and save. The next 
 
 There is no transaction editing or deletion by design (audit trail). To correct a mistake:
 
-- **Overcharged:** Apply a top-up for the difference, with a note explaining the correction.
-- **Under-charged:** Apply a charge for the difference, with a note.
+- **Overcharged at bar:** Apply a top-up for the difference, with a note explaining the correction.
+- **Under-charged at bar:** Apply a charge for the difference, with a note.
 - **Wrong member charged:** Top up the affected member and charge the correct one, with matching notes on both.
+- **Incorrect top-up or withdrawal:** Apply an equal and opposite transaction (top-up to reverse a withdrawal, or withdrawal to reverse a top-up) with a note.
 
 ### Resetting a Member's PIN
 
@@ -135,16 +204,53 @@ Members tab → click **Statement** on any row. Statements open in a new browser
 
 ## Backing Up Data
 
-All data is stored in a single SQLite file: `clubledger.db` in the application folder. To back up, simply copy this file to another location.
+All application data is stored in a SQLite database in the application folder. To take a full backup, copy the following files to another location:
+
+**Database files:**
+- `clubledger.db` — the main database
+- `clubledger.db-wal` and `clubledger.db-shm` — write-ahead log files that may be present while the app is running
+
+If the app is stopped, only `clubledger.db` needs to be copied (the WAL files will have been checkpointed). If the app is running, copy all three files.
+
+**Logo file (if applicable):**
+- `static/logo.png` (or `.jpg`, `.gif`, etc.) — the uploaded logo image. Copy this if you have uploaded a logo via the Branding settings.
 
 ```
-# Linux / Mac – copy to home directory
+# Linux / Mac – back up the database to the home directory
 cp /path/to/ClubLedger/clubledger.db ~/clubledger-backup-$(date +%Y%m%d).db
 ```
 
-The `staff.json` file stores the legacy staff name list (used only by the standalone `/cashier` and `/bar` pages, not the main app). Back this up too if you use those pages.
+To restore, stop the server, replace `clubledger.db` with the backup copy (and the logo file if needed), and restart.
 
-To restore, stop the server, replace `clubledger.db` with the backup copy, and restart.
+---
+
+## Command-Line Tools (`manage.py`)
+
+Two administrative commands are available from the server terminal. They do not require using the web interface.
+
+### Reset an Admin Password
+
+```
+python manage.py reset-admin
+```
+
+- Interactively resets the password for an admin account.
+- If there are multiple admin accounts, lists them and prompts you to select one.
+- Prompts for a new password and a confirmation (minimum 4 characters). The password is not echoed to the screen.
+- The app does **not** need to be stopped first — WAL mode allows concurrent access.
+- Existing sessions for that account remain valid until they expire naturally (8 hours). To invalidate them immediately, restart the app after running this command.
+
+### Reset the Database
+
+```
+python manage.py reset-db
+```
+
+- **Permanently deletes all data:** members, balances, transactions, staff accounts, and settings. This cannot be undone.
+- You must type `RESET` to confirm. Anything else cancels the operation.
+- The app **must be stopped** before running this command.
+- After running: restart the app. It will create a fresh database with the default `admin` / `admin` credentials.
+- Change the admin password immediately after the fresh start.
 
 ---
 
