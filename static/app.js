@@ -58,6 +58,7 @@ async function doLogout() {
 }
 
 async function startApp() {
+  document.getElementById('loginOverlay').classList.add('hidden');
   await loadConfig();
 
   const brand = document.getElementById('navBrand');
