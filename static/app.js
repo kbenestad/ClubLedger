@@ -61,9 +61,22 @@ async function doLogout() {
   showLogin();
 }
 
+function populateTransferTypes() {
+  const types = Array.isArray(cfg.transfer_types) ? cfg.transfer_types : [];
+  ['cashierTransferType', 'withdrawalTransferType'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— select —</option>' +
+      types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+    if (prev && types.includes(prev)) sel.value = prev;
+  });
+}
+
 async function startApp() {
   document.getElementById('loginOverlay').classList.add('hidden');
   await loadConfig();
+  populateTransferTypes();
 
   const brand = document.getElementById('navBrand');
   if (brand) brand.textContent = cfg.club_name;
@@ -268,11 +281,15 @@ function selectCashierMember(id, name, number, balance, balanceDisplay) {
 function clearCashierSelection() {
   cashierMember = null;
   document.getElementById('cashierForm').classList.add('hidden');
-  document.getElementById('cashierAmount').value   = '';
-  document.getElementById('cashierNote').value     = '';
-  document.getElementById('withdrawalAmount').value = '';
-  document.getElementById('withdrawalPin').value    = '';
-  document.getElementById('withdrawalNote').value   = '';
+  document.getElementById('cashierAmount').value        = '';
+  document.getElementById('cashierTransferType').value  = '';
+  document.getElementById('cashierTransferRef').value   = '';
+  document.getElementById('cashierNote').value          = '';
+  document.getElementById('withdrawalAmount').value     = '';
+  document.getElementById('withdrawalPin').value        = '';
+  document.getElementById('withdrawalTransferType').value = '';
+  document.getElementById('withdrawalTransferRef').value  = '';
+  document.getElementById('withdrawalNote').value       = '';
   setMsg('cashierTopupMsg', '', '');
   setMsg('cashierWithdrawalMsg', '', '');
   setMsg('cashierMsg', '', '');
@@ -280,37 +297,47 @@ function clearCashierSelection() {
 
 async function doTopup() {
   if (!cashierMember) return;
-  const amount = toMinor('cashierAmount');
-  const note   = document.getElementById('cashierNote').value.trim();
+  const amount       = toMinor('cashierAmount');
+  const transferType = document.getElementById('cashierTransferType').value || null;
+  const transferRef  = document.getElementById('cashierTransferRef').value.trim() || null;
+  const note         = document.getElementById('cashierNote').value.trim() || null;
   if (!amount) { setMsg('cashierTopupMsg', 'Enter a valid amount.', 'err'); return; }
   try {
     const r = await apiFetch('/topup', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: cashierMember.id, amount, note: note || null })
+      body: JSON.stringify({ member_id: cashierMember.id, amount, note,
+                             transfer_type: transferType, transfer_ref: transferRef })
     });
     window.open(`/receipt/${r.entry_id}`, '_blank');
-    document.getElementById('cashierAmount').value = '';
-    document.getElementById('cashierNote').value = '';
+    document.getElementById('cashierAmount').value       = '';
+    document.getElementById('cashierTransferType').value = '';
+    document.getElementById('cashierTransferRef').value  = '';
+    document.getElementById('cashierNote').value         = '';
     setMsg('cashierTopupMsg', `Top-up complete. New balance: ${r.new_balance_display}`, 'ok');
   } catch (err) { setMsg('cashierTopupMsg', err.message, 'err'); }
 }
 
 async function doWithdrawal() {
   if (!cashierMember) return;
-  const amount = toMinor('withdrawalAmount');
-  const pin    = document.getElementById('withdrawalPin').value;
-  const note   = document.getElementById('withdrawalNote').value.trim();
+  const amount       = toMinor('withdrawalAmount');
+  const pin          = document.getElementById('withdrawalPin').value;
+  const transferType = document.getElementById('withdrawalTransferType').value || null;
+  const transferRef  = document.getElementById('withdrawalTransferRef').value.trim() || null;
+  const note         = document.getElementById('withdrawalNote').value.trim() || null;
   if (!amount) { setMsg('cashierWithdrawalMsg', 'Enter a valid amount.', 'err'); return; }
   if (!pin)    { setMsg('cashierWithdrawalMsg', 'PIN is required.', 'err'); return; }
   try {
     const r = await apiFetch('/withdrawal', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: cashierMember.id, amount, pin, note: note || null })
+      body: JSON.stringify({ member_id: cashierMember.id, amount, pin, note,
+                             transfer_type: transferType, transfer_ref: transferRef })
     });
     window.open(`/receipt/${r.entry_id}`, '_blank');
-    document.getElementById('withdrawalAmount').value = '';
-    document.getElementById('withdrawalPin').value    = '';
-    document.getElementById('withdrawalNote').value   = '';
+    document.getElementById('withdrawalAmount').value       = '';
+    document.getElementById('withdrawalPin').value          = '';
+    document.getElementById('withdrawalTransferType').value = '';
+    document.getElementById('withdrawalTransferRef').value  = '';
+    document.getElementById('withdrawalNote').value         = '';
     setMsg('cashierWithdrawalMsg', `Withdrawal complete. New balance: ${r.new_balance_display}`, 'ok');
   } catch (err) { setMsg('cashierWithdrawalMsg', err.message, 'err'); }
 }
@@ -377,6 +404,8 @@ async function loadAdminSettings() {
   try {
     const s = await apiFetch('/admin/settings');
     const div = s.currency_divisor || 100;
+    const majorUnit = s.currency_major || 'major units';
+    // General
     document.getElementById('s-club-name').value        = s.club_name        || '';
     document.getElementById('s-currency-symbol').value  = s.currency_symbol  || '';
     document.getElementById('s-currency-major').value   = s.currency_major   || '';
@@ -385,28 +414,103 @@ async function loadAdminSettings() {
     document.getElementById('s-min-topup').value        = ((s.min_topup  || 0) / div).toFixed(2);
     document.getElementById('s-max-topup').value        = ((s.max_topup  || 0) / div).toFixed(2);
     document.getElementById('s-max-charge').value       = ((s.max_charge || 0) / div).toFixed(2);
-    document.getElementById('s-receipt-footer').value    = s.receipt_footer   || '';
-    document.getElementById('s-overdraft-policy').value  = s.overdraft_policy || 'never';
-    const sym = s.currency_symbol || '';
-    document.getElementById('s-min-hint').textContent   = `in ${s.currency_major || 'major units'}`;
-    document.getElementById('s-max-hint').textContent   = `in ${s.currency_major || 'major units'}`;
-    document.getElementById('s-charge-hint').textContent= `in ${s.currency_major || 'major units'}`;
+    document.getElementById('s-overdraft-policy').value = s.overdraft_policy || 'never';
+    document.getElementById('s-min-hint').textContent   = `in ${majorUnit}`;
+    document.getElementById('s-max-hint').textContent   = `in ${majorUnit}`;
+    document.getElementById('s-charge-hint').textContent= `in ${majorUnit}`;
+    // Business address
+    document.getElementById('s-biz-address1').value = s.biz_address1 || '';
+    document.getElementById('s-biz-address2').value = s.biz_address2 || '';
+    document.getElementById('s-biz-address3').value = s.biz_address3 || '';
+    document.getElementById('s-biz-address4').value = s.biz_address4 || '';
+    document.getElementById('s-biz-country').value  = s.biz_country  || '';
+    document.getElementById('s-biz-phone').value    = s.biz_phone    || '';
+    document.getElementById('s-biz-email').value    = s.biz_email    || '';
+    document.getElementById('s-biz-website').value  = s.biz_website  || '';
+    // Branding
+    document.getElementById('s-logo-url').value     = s.logo_url     || '';
+    document.getElementById('s-logo-align').value   = s.logo_align   || 'left';
+    document.getElementById('s-bar-name').value     = s.bar_name     || '';
+    document.getElementById('s-cashier-name').value = s.cashier_name || '';
+    // Transactions
+    document.getElementById('s-txn-ref-prefix').value = s.txn_ref_prefix || '';
+    // transfer_types from /admin/settings is the raw comma-separated string
+    const rawTT = Array.isArray(s.transfer_types) ? s.transfer_types.join(',') : (s.transfer_types || '');
+    document.getElementById('s-transfer-types').value = rawTT;
+    // Receipt labels
+    document.getElementById('s-lbl-receipt').value            = s.lbl_receipt            || '';
+    document.getElementById('s-lbl-topup-receipt').value      = s.lbl_topup_receipt      || '';
+    document.getElementById('s-lbl-withdrawal-receipt').value = s.lbl_withdrawal_receipt || '';
+    document.getElementById('s-lbl-staff').value              = s.lbl_staff              || '';
+    document.getElementById('s-lbl-transaction').value        = s.lbl_transaction        || '';
+    document.getElementById('s-lbl-charge').value             = s.lbl_charge_venue       || '';
+    document.getElementById('s-lbl-txn-time').value           = s.lbl_txn_time           || '';
+    document.getElementById('s-lbl-amount-charged').value     = s.lbl_amount_charged     || '';
+    document.getElementById('s-lbl-remaining-balance').value  = s.lbl_remaining_balance  || '';
+    document.getElementById('s-lbl-balance-transfer').value   = s.lbl_balance_transfer   || '';
+    document.getElementById('s-lbl-amount-topup').value       = s.lbl_amount_topup       || '';
+    document.getElementById('s-lbl-amount-withdrawal').value  = s.lbl_amount_withdrawal  || '';
+    document.getElementById('s-lbl-transfer-type').value      = s.lbl_transfer_type      || '';
+    document.getElementById('s-lbl-transfer-ref').value       = s.lbl_transfer_ref       || '';
+    // Footers
+    document.getElementById('s-receipt-footer').value         = s.receipt_footer         || '';
+    document.getElementById('s-receipt-footer-charge').value  = s.receipt_footer_charge  || '';
+    document.getElementById('s-receipt-footer-cashier').value = s.receipt_footer_cashier || '';
   } catch (err) { setMsg('settingsMsg', err.message, 'err'); }
 }
 
+function _sv(id) { return document.getElementById(id).value; }
+function _svt(id) { return _sv(id).trim(); }
+
 async function saveSettings() {
-  const div = parseInt(document.getElementById('s-currency-divisor').value, 10) || 100;
+  const div = parseInt(_sv('s-currency-divisor'), 10) || 100;
   const body = {
-    club_name:              document.getElementById('s-club-name').value.trim(),
-    currency_symbol:        document.getElementById('s-currency-symbol').value.trim(),
-    currency_major:         document.getElementById('s-currency-major').value.trim(),
-    currency_minor:         document.getElementById('s-currency-minor').value.trim(),
+    // General
+    club_name:              _svt('s-club-name'),
+    currency_symbol:        _svt('s-currency-symbol'),
+    currency_major:         _svt('s-currency-major'),
+    currency_minor:         _svt('s-currency-minor'),
     currency_divisor:       div,
-    min_topup:              Math.round(parseFloat(document.getElementById('s-min-topup').value)  * div),
-    max_topup:              Math.round(parseFloat(document.getElementById('s-max-topup').value)  * div),
-    max_charge:             Math.round(parseFloat(document.getElementById('s-max-charge').value) * div),
-    receipt_footer:   document.getElementById('s-receipt-footer').value,
-    overdraft_policy: document.getElementById('s-overdraft-policy').value,
+    min_topup:              Math.round(parseFloat(_sv('s-min-topup'))  * div),
+    max_topup:              Math.round(parseFloat(_sv('s-max-topup'))  * div),
+    max_charge:             Math.round(parseFloat(_sv('s-max-charge')) * div),
+    overdraft_policy:       _sv('s-overdraft-policy'),
+    // Business address
+    biz_address1:  _svt('s-biz-address1'),
+    biz_address2:  _svt('s-biz-address2'),
+    biz_address3:  _svt('s-biz-address3'),
+    biz_address4:  _svt('s-biz-address4'),
+    biz_country:   _svt('s-biz-country'),
+    biz_phone:     _svt('s-biz-phone'),
+    biz_email:     _svt('s-biz-email'),
+    biz_website:   _svt('s-biz-website'),
+    // Branding
+    logo_url:      _svt('s-logo-url'),
+    logo_align:    _sv('s-logo-align'),
+    bar_name:      _svt('s-bar-name'),
+    cashier_name:  _svt('s-cashier-name'),
+    // Transactions
+    txn_ref_prefix: _svt('s-txn-ref-prefix'),
+    transfer_types: _svt('s-transfer-types'),
+    // Receipt labels
+    lbl_receipt:            _svt('s-lbl-receipt'),
+    lbl_topup_receipt:      _svt('s-lbl-topup-receipt'),
+    lbl_withdrawal_receipt: _svt('s-lbl-withdrawal-receipt'),
+    lbl_staff:              _svt('s-lbl-staff'),
+    lbl_transaction:        _svt('s-lbl-transaction'),
+    lbl_charge_venue:       _svt('s-lbl-charge'),
+    lbl_txn_time:           _svt('s-lbl-txn-time'),
+    lbl_amount_charged:     _svt('s-lbl-amount-charged'),
+    lbl_remaining_balance:  _svt('s-lbl-remaining-balance'),
+    lbl_balance_transfer:   _svt('s-lbl-balance-transfer'),
+    lbl_amount_topup:       _svt('s-lbl-amount-topup'),
+    lbl_amount_withdrawal:  _svt('s-lbl-amount-withdrawal'),
+    lbl_transfer_type:      _svt('s-lbl-transfer-type'),
+    lbl_transfer_ref:       _svt('s-lbl-transfer-ref'),
+    // Footers
+    receipt_footer:         _sv('s-receipt-footer'),
+    receipt_footer_charge:  _sv('s-receipt-footer-charge'),
+    receipt_footer_cashier: _sv('s-receipt-footer-cashier'),
   };
   try {
     await apiFetch('/admin/settings', {
@@ -414,7 +518,8 @@ async function saveSettings() {
       body: JSON.stringify(body)
     });
     setMsg('settingsMsg', 'Settings saved.', 'ok');
-    await loadConfig();  // refresh frontend cfg
+    await loadConfig();
+    populateTransferTypes();
     document.querySelectorAll('.currency-unit').forEach(el => { el.textContent = cfg.currency_major || cfg.currency_unit; });
     if (document.getElementById('navBrand'))
       document.getElementById('navBrand').textContent = cfg.club_name;

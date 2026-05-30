@@ -24,14 +24,49 @@ from pydantic import BaseModel, field_validator
 CONFIG = {
     "club_name":              "ClubLedger",
     "currency_symbol":        "£",
-    "currency_major":         "pounds",   # label for major unit (what users enter)
-    "currency_minor":         "pence",    # label for stored minor unit
-    "currency_divisor":       100,        # minor units per major unit
-    "overdraft_policy":       "never",  # never|always|staff_override|admin_override|staff_block
-    "min_topup":              100,        # minor units
+    "currency_major":         "pounds",
+    "currency_minor":         "pence",
+    "currency_divisor":       100,
+    "overdraft_policy":       "never",
+    "min_topup":              100,
     "max_topup":              100_000,
     "max_charge":             50_000,
+    # Business contact
+    "biz_address1":           "",
+    "biz_address2":           "",
+    "biz_address3":           "",
+    "biz_address4":           "",
+    "biz_country":            "",
+    "biz_phone":              "",
+    "biz_email":              "",
+    "biz_website":            "",
+    # Branding
+    "logo_url":               "",
+    "logo_align":             "left",
+    "bar_name":               "Bar",
+    "cashier_name":           "Cashier",
+    # Transactions
+    "txn_ref_prefix":         "TXN",
+    "transfer_types":         "Bank Transfer,Cash,QR",
+    # Receipt labels (localizable)
+    "lbl_receipt":            "RECEIPT",
+    "lbl_topup_receipt":      "TOP-UP RECEIPT",
+    "lbl_withdrawal_receipt": "WITHDRAWAL RECEIPT",
+    "lbl_staff":              "STAFF",
+    "lbl_transaction":        "TRANSACTION",
+    "lbl_charge_venue":       "CHARGE",
+    "lbl_txn_time":           "TRANSACTION TIME",
+    "lbl_amount_charged":     "AMOUNT CHARGED",
+    "lbl_remaining_balance":  "REMAINING BALANCE",
+    "lbl_balance_transfer":   "BALANCE TRANSFER",
+    "lbl_amount_topup":       "AMOUNT TOPPED-UP",
+    "lbl_amount_withdrawal":  "AMOUNT WITHDRAWN",
+    "lbl_transfer_type":      "TRANSFER TYPE",
+    "lbl_transfer_ref":       "TRANSFER REFERENCE",
+    # Receipt footers
     "receipt_footer":         "",
+    "receipt_footer_charge":  "",
+    "receipt_footer_cashier": "",
 }
 
 DB_PATH  = "clubledger.db"
@@ -79,14 +114,16 @@ def init_db():
                 created_at    TEXT NOT NULL DEFAULT (datetime('now'))
             );
             CREATE TABLE IF NOT EXISTS ledger_entries (
-                id          INTEGER PRIMARY KEY AUTOINCREMENT,
-                member_id   INTEGER NOT NULL REFERENCES members(id),
-                amount      INTEGER NOT NULL,
-                type        TEXT NOT NULL CHECK(type IN ('topup','charge','withdrawal')),
-                venue       TEXT NOT NULL CHECK(venue IN ('cashier','bar')),
-                note        TEXT,
-                staff_name  TEXT NOT NULL,
-                created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                member_id     INTEGER NOT NULL REFERENCES members(id),
+                amount        INTEGER NOT NULL,
+                type          TEXT NOT NULL CHECK(type IN ('topup','charge','withdrawal')),
+                venue         TEXT NOT NULL CHECK(venue IN ('cashier','bar')),
+                note          TEXT,
+                staff_name    TEXT NOT NULL,
+                transfer_type TEXT,
+                transfer_ref  TEXT,
+                created_at    TEXT NOT NULL DEFAULT (datetime('now'))
             );
             CREATE TABLE IF NOT EXISTS products (
                 id           INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -184,6 +221,13 @@ def migrate_db():
             )
             conn.execute("DELETE FROM app_settings WHERE key='allow_negative_balance'")
 
+        # --- ledger_entries: add transfer_type and transfer_ref columns ---
+        le_cols = [r[1] for r in conn.execute("PRAGMA table_info(ledger_entries)").fetchall()]
+        if "transfer_type" not in le_cols:
+            conn.execute("ALTER TABLE ledger_entries ADD COLUMN transfer_type TEXT")
+        if "transfer_ref" not in le_cols:
+            conn.execute("ALTER TABLE ledger_entries ADD COLUMN transfer_ref TEXT")
+
 def seed_admin():
     with db_conn() as conn:
         if conn.execute("SELECT COUNT(*) FROM staff_accounts WHERE role='admin'").fetchone()[0] == 0:
@@ -262,7 +306,6 @@ def pos_user(user: dict = Depends(current_user)):
     if user["role"] not in ("pos-staff", "admin"):
         raise HTTPException(403, "POS staff access required")
     return user
-    return user
 
 # ---------------------------------------------------------------------------
 # App
@@ -311,9 +354,11 @@ class MemberUpdate(BaseModel):
     overdraft_override: Optional[int] = None  # NULL=default, 1=allow, 0=block
 
 class TopupRequest(BaseModel):
-    member_id: int
-    amount:    int   # minor units
-    note:      Optional[str] = None
+    member_id:     int
+    amount:        int
+    note:          Optional[str] = None
+    transfer_type: Optional[str] = None
+    transfer_ref:  Optional[str] = None
 
 class ChargeRequest(BaseModel):
     member_id: int
@@ -322,10 +367,12 @@ class ChargeRequest(BaseModel):
     note:      Optional[str] = None
 
 class WithdrawalRequest(BaseModel):
-    member_id: int
-    amount:    int   # minor units
-    pin:       str
-    note:      Optional[str] = None
+    member_id:     int
+    amount:        int
+    pin:           str
+    note:          Optional[str] = None
+    transfer_type: Optional[str] = None
+    transfer_ref:  Optional[str] = None
 
 class ProductCreate(BaseModel):
     name:        str
@@ -364,7 +411,42 @@ class AppSettingsUpdate(BaseModel):
     min_topup:              Optional[int]  = None
     max_topup:              Optional[int]  = None
     max_charge:             Optional[int]  = None
+    # Business contact
+    biz_address1:           Optional[str]  = None
+    biz_address2:           Optional[str]  = None
+    biz_address3:           Optional[str]  = None
+    biz_address4:           Optional[str]  = None
+    biz_country:            Optional[str]  = None
+    biz_phone:              Optional[str]  = None
+    biz_email:              Optional[str]  = None
+    biz_website:            Optional[str]  = None
+    # Branding
+    logo_url:               Optional[str]  = None
+    logo_align:             Optional[str]  = None
+    bar_name:               Optional[str]  = None
+    cashier_name:           Optional[str]  = None
+    # Transactions
+    txn_ref_prefix:         Optional[str]  = None
+    transfer_types:         Optional[str]  = None
+    # Receipt labels
+    lbl_receipt:            Optional[str]  = None
+    lbl_topup_receipt:      Optional[str]  = None
+    lbl_withdrawal_receipt: Optional[str]  = None
+    lbl_staff:              Optional[str]  = None
+    lbl_transaction:        Optional[str]  = None
+    lbl_charge_venue:       Optional[str]  = None
+    lbl_txn_time:           Optional[str]  = None
+    lbl_amount_charged:     Optional[str]  = None
+    lbl_remaining_balance:  Optional[str]  = None
+    lbl_balance_transfer:   Optional[str]  = None
+    lbl_amount_topup:       Optional[str]  = None
+    lbl_amount_withdrawal:  Optional[str]  = None
+    lbl_transfer_type:      Optional[str]  = None
+    lbl_transfer_ref:       Optional[str]  = None
+    # Receipt footers
     receipt_footer:         Optional[str]  = None
+    receipt_footer_charge:  Optional[str]  = None
+    receipt_footer_cashier: Optional[str]  = None
 
 # ---------------------------------------------------------------------------
 # Page routes
@@ -510,8 +592,9 @@ def topup(body: TopupRequest, user: dict = Depends(cashier_user)):
         if not conn.execute("SELECT id FROM members WHERE id=?", (body.member_id,)).fetchone():
             raise HTTPException(404, "Member not found")
         cur = conn.execute(
-            "INSERT INTO ledger_entries (member_id,amount,type,venue,note,staff_name) VALUES (?,?,?,?,?,?)",
-            (body.member_id, body.amount, "topup", "cashier", body.note, user["name"])
+            "INSERT INTO ledger_entries (member_id,amount,type,venue,note,staff_name,transfer_type,transfer_ref) VALUES (?,?,?,?,?,?,?,?)",
+            (body.member_id, body.amount, "topup", "cashier", body.note, user["name"],
+             body.transfer_type, body.transfer_ref)
         )
         eid = cur.lastrowid
         bal = member_balance(conn, body.member_id)
@@ -567,8 +650,9 @@ def withdrawal(body: WithdrawalRequest, user: dict = Depends(cashier_user)):
         if bal < body.amount:
             raise HTTPException(400, f"Insufficient balance ({format_amount(bal)})")
         cur = conn.execute(
-            "INSERT INTO ledger_entries (member_id,amount,type,venue,note,staff_name) VALUES (?,?,?,?,?,?)",
-            (body.member_id, body.amount, "withdrawal", "cashier", body.note, user["name"])
+            "INSERT INTO ledger_entries (member_id,amount,type,venue,note,staff_name,transfer_type,transfer_ref) VALUES (?,?,?,?,?,?,?,?)",
+            (body.member_id, body.amount, "withdrawal", "cashier", body.note, user["name"],
+             body.transfer_type, body.transfer_ref)
         )
         eid = cur.lastrowid
         new_bal = member_balance(conn, body.member_id)
@@ -617,14 +701,65 @@ def _print_controls():
   <label><input type="radio" name="ps" value="A5" onchange="setSize('A5')"> A5</label>
 </div>"""
 
-PRINT_CSS = """
+def _txn_ref(entry_id: int, s: dict) -> str:
+    prefix = (s.get("txn_ref_prefix") or "TXN").strip()
+    return f"{prefix}{entry_id:07d}"
+
+def _logo_html(s: dict) -> str:
+    url = (s.get("logo_url") or "").strip()
+    if not url:
+        return ""
+    align = s.get("logo_align", "left")
+    css_cls = f"biz-logo align-{align}" if align in ("left", "center", "right") else "biz-logo align-left"
+    return f'<img src="{url}" class="{css_cls}" alt="logo">'
+
+def _biz_header_html(s: dict) -> str:
+    parts = [_logo_html(s)]
+    parts.append(f'<div class="biz-name">{s.get("club_name") or "ClubLedger"}</div>')
+    addr = [s.get(f"biz_address{i}", "") for i in range(1, 5)] + [s.get("biz_country", "")]
+    addr = [l.strip() for l in addr if l and l.strip()]
+    if addr:
+        parts.append('<div class="biz-address">' + "<br>".join(addr) + "</div>")
+    contact = [x for x in [s.get("biz_phone",""), s.get("biz_email",""), s.get("biz_website","")] if x and x.strip()]
+    if contact:
+        parts.append('<div class="biz-contact">' + " &nbsp;|&nbsp; ".join(contact) + "</div>")
+    return '<div class="biz-header">' + "\n".join(p for p in parts if p) + "</div>"
+
+RECEIPT_CSS = """
   body{font-family:Arial,sans-serif;font-size:11px;color:#111;margin:24px;}
-  h1{font-size:18px;margin-bottom:2px;} h2{font-size:13px;font-weight:normal;color:#555;margin:0 0 16px;}
+  h2{font-size:14px;font-weight:bold;margin:10px 0 4px;}
+  hr{border:none;border-top:1px solid #ccc;margin:10px 0;}
   .controls{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
   .size-label{font-size:12px;color:#555;} .controls label{font-size:12px;cursor:pointer;}
   .print-btn{padding:7px 18px;font-size:13px;cursor:pointer;margin-left:auto;}
-  .footer{margin-top:16px;font-size:10px;color:#888;text-align:center;white-space:pre-wrap;}
   @media print{.no-print{display:none;}}
+  .biz-header{margin-bottom:4px;}
+  .biz-logo{max-height:60px;max-width:200px;display:block;margin-bottom:4px;}
+  .biz-logo.align-center{margin-left:auto;margin-right:auto;}
+  .biz-logo.align-right{margin-left:auto;}
+  .biz-name{font-size:15px;font-weight:bold;margin:2px 0;}
+  .biz-address{color:#555;line-height:1.5;}
+  .biz-contact{color:#555;margin-top:3px;}
+  .receipt-title{font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;margin:10px 0 6px;}
+  .member-section{display:flex;justify-content:space-between;align-items:baseline;margin:5px 0;}
+  .member-name{font-size:13px;font-weight:bold;}
+  .member-num{color:#555;}
+  .receipt-grid{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;margin:6px 0;}
+  .rlbl{font-weight:600;color:#555;white-space:nowrap;font-size:10px;text-transform:uppercase;letter-spacing:.03em;}
+  .rval{text-align:right;}
+  .section-head{grid-column:span 2;font-weight:bold;font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px;}
+  .charge-val{font-size:20px;font-weight:bold;color:#c00;}
+  .credit-val{font-size:20px;font-weight:bold;color:#080;}
+  .balance-val{font-size:14px;font-weight:bold;}
+  table{width:100%;border-collapse:collapse;margin-top:10px;}
+  th{background:#222;color:#fff;padding:5px 8px;text-align:left;font-size:10px;}
+  td{padding:4px 8px;border-bottom:1px solid #e0e0e0;}
+  .num{text-align:right;font-variant-numeric:tabular-nums;}
+  .red{color:#c00;} .grn{color:#080;}
+  .balance-box{margin-top:12px;text-align:right;font-size:14px;}
+  .balance-box span{font-weight:bold;font-size:18px;}
+  .sub-row td{font-size:10px;color:#777;padding-top:0;border-bottom:none;padding-left:24px;}
+  .footer{margin-top:14px;font-size:10px;color:#888;text-align:center;white-space:pre-wrap;}
 """
 
 @app.get("/members/{member_id}/statement", response_class=HTMLResponse)
@@ -640,42 +775,53 @@ def statement(member_id: int):
         bal = member_balance(conn, member_id)
 
     sym, div = s.get("currency_symbol","£"), s.get("currency_divisor",100)
-    club, footer = s.get("club_name","ClubLedger"), s.get("receipt_footer","")
+    footer = s.get("receipt_footer","")
+    bar_name = s.get("bar_name","Bar")
+    cashier_name = s.get("cashier_name","Cashier")
 
     def fmt(p): return f"{sym}{p/div:.2f}"
+    def venue_label(v): return bar_name if v == "bar" else cashier_name
 
     rows_html, running = "", 0
     for r in rows:
+        txn_ref = _txn_ref(r["id"], s)
         if r["type"] == "topup":
-            running += r["amount"]; dr, cr = "", fmt(r["amount"])
+            running += r["amount"]; dr, cr = "", fmt(r["amount"]); type_lbl = "Top-up"
+        elif r["type"] == "withdrawal":
+            running -= r["amount"]; dr, cr = fmt(r["amount"]), ""; type_lbl = "Withdrawal"
         else:
-            running -= r["amount"]; dr, cr = fmt(r["amount"]), ""
-        rows_html += (f"<tr><td>{r['created_at'][:16]}</td><td class='cap'>{r['type']}</td>"
-                      f"<td class='cap'>{r['venue']}</td><td>{r['note'] or ''}</td>"
-                      f"<td>{r['staff_name']}</td><td class='num red'>{dr}</td>"
-                      f"<td class='num grn'>{cr}</td><td class='num'>{fmt(running)}</td></tr>")
+            running -= r["amount"]; dr, cr = fmt(r["amount"]), ""; type_lbl = "Charge"
+        rows_html += (f"<tr><td>{r['created_at'][:16]}</td><td>{type_lbl}</td>"
+                      f"<td>{venue_label(r['venue'])}</td><td>{txn_ref}</td>"
+                      f"<td>{r['note'] or ''}</td><td>{r['staff_name']}</td>"
+                      f"<td class='num red'>{dr}</td><td class='num grn'>{cr}</td>"
+                      f"<td class='num'>{fmt(running)}</td></tr>")
+        if r["type"] in ("topup", "withdrawal"):
+            tf_type = r["transfer_type"] or ""
+            tf_ref  = r["transfer_ref"]  or ""
+            if tf_type or tf_ref:
+                sub = " &nbsp;·&nbsp; ".join(filter(None, [
+                    f"Type: {tf_type}" if tf_type else "",
+                    f"Ref: {tf_ref}"   if tf_ref  else "",
+                ]))
+                rows_html += f'<tr class="sub-row"><td colspan="9">{sub}</td></tr>'
 
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
-<title>Statement – {member['name']}</title><style>
-  {PRINT_CSS}
-  table{{width:100%;border-collapse:collapse;margin-top:16px;}}
-  th{{background:#222;color:#fff;padding:5px 8px;text-align:left;}}
-  td{{padding:4px 8px;border-bottom:1px solid #e0e0e0;}}
-  .num{{text-align:right;font-variant-numeric:tabular-nums;}}
-  .red{{color:#c00;}} .grn{{color:#080;}} .cap{{text-transform:capitalize;}}
-  .balance-box{{margin-top:12px;text-align:right;font-size:14px;}}
-  .balance-box span{{font-weight:bold;font-size:18px;}}
-</style></head><body>
+<title>Statement – {member['name']}</title><style>{RECEIPT_CSS}</style></head><body>
 {_print_controls()}
 <div class="no-print controls" style="margin-top:0">
   <button class="print-btn" onclick="window.print()">Print Statement</button>
 </div>
-<h1>{club} – Account Statement</h1>
-<h2>Member: {member['name']} &nbsp;|&nbsp; #{member['member_number']} &nbsp;|&nbsp;
-Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC</h2>
+{_biz_header_html(s)}
+<hr>
+<h2>Account Statement</h2>
+<div style="margin-bottom:10px;color:#555;font-size:11px;">
+  Member: <strong>{member['name']}</strong> &nbsp;|&nbsp; #{member['member_number']} &nbsp;|&nbsp;
+  Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC
+</div>
 <table><thead><tr>
-  <th>Date/Time</th><th>Type</th><th>Venue</th><th>Note</th>
-  <th>Staff</th><th class="num">Charge</th><th class="num">Top-up</th><th class="num">Balance</th>
+  <th>Date/Time</th><th>Type</th><th>Venue</th><th>Reference</th><th>Note</th>
+  <th>Staff</th><th class="num">Charge</th><th class="num">Credit</th><th class="num">Balance</th>
 </tr></thead><tbody>{rows_html}</tbody></table>
 <div class="balance-box">Current Balance: <span>{fmt(bal)}</span></div>
 {('<div class="footer">' + footer + '</div>') if footer else ''}
@@ -694,39 +840,80 @@ def receipt(entry_id: int):
         """, (entry["member_id"], entry_id)).fetchone()[0]
 
     sym, div = s.get("currency_symbol","£"), s.get("currency_divisor",100)
-    club, footer = s.get("club_name","ClubLedger"), s.get("receipt_footer","")
-
     def fmt(p): return f"{sym}{p/div:.2f}"
 
-    type_label = {"topup": "Top-up", "charge": "Charge", "withdrawal": "Withdrawal"}.get(entry["type"], entry["type"].capitalize())
-    colour = "#080" if entry["type"] == "topup" else "#c00"
+    txn_ref = _txn_ref(entry_id, s)
+    etype   = entry["type"]
+    venue_name = s.get("bar_name","Bar") if entry["venue"] == "bar" else s.get("cashier_name","Cashier")
+
+    lbl_staff     = s.get("lbl_staff", "STAFF")
+    lbl_txn       = s.get("lbl_transaction", "TRANSACTION")
+    lbl_txn_time  = s.get("lbl_txn_time", "TRANSACTION TIME")
+    lbl_remaining = s.get("lbl_remaining_balance", "REMAINING BALANCE")
+
+    if etype == "topup":
+        title  = s.get("lbl_topup_receipt", "TOP-UP RECEIPT")
+        footer = s.get("receipt_footer_cashier") or s.get("receipt_footer", "")
+    elif etype == "withdrawal":
+        title  = s.get("lbl_withdrawal_receipt", "WITHDRAWAL RECEIPT")
+        footer = s.get("receipt_footer_cashier") or s.get("receipt_footer", "")
+    else:
+        title  = s.get("lbl_receipt", "RECEIPT")
+        footer = s.get("receipt_footer_charge") or s.get("receipt_footer", "")
+
+    if etype == "charge":
+        lbl_charge = s.get("lbl_charge_venue", "CHARGE")
+        lbl_amount = s.get("lbl_amount_charged", "AMOUNT CHARGED")
+        grid_details = (
+            f'<div class="rlbl">{lbl_staff}</div><div class="rval">{entry["staff_name"]}</div>'
+            f'<div class="rlbl">{lbl_txn}</div><div class="rval">{txn_ref}</div>'
+            f'<div class="rlbl">{lbl_charge}</div><div class="rval">{venue_name}</div>'
+            f'<div class="rlbl">{lbl_txn_time}</div><div class="rval">{entry["created_at"][:16]} UTC</div>'
+        )
+        grid_amounts = (
+            f'<div class="rlbl">{lbl_amount}</div><div class="rval charge-val">{fmt(entry["amount"])}</div>'
+            f'<div class="rlbl">{lbl_remaining}</div><div class="rval balance-val">{fmt(bal_after)}</div>'
+        )
+    else:
+        lbl_tf_section = s.get("lbl_balance_transfer", "BALANCE TRANSFER")
+        lbl_tf_type    = s.get("lbl_transfer_type", "TRANSFER TYPE")
+        lbl_tf_ref     = s.get("lbl_transfer_ref",  "TRANSFER REFERENCE")
+        lbl_amount     = s.get("lbl_amount_topup", "AMOUNT TOPPED-UP") if etype == "topup" else s.get("lbl_amount_withdrawal", "AMOUNT WITHDRAWN")
+        tf_type = entry["transfer_type"] or ""
+        tf_ref  = entry["transfer_ref"]  or ""
+        grid_details = (
+            f'<div class="rlbl">{lbl_staff}</div><div class="rval">{entry["staff_name"]}</div>'
+            f'<div class="rlbl">{lbl_txn}</div><div class="rval">{txn_ref}</div>'
+            f'<div class="rlbl">{lbl_txn_time}</div><div class="rval">{entry["created_at"][:16]} UTC</div>'
+        )
+        tf_rows = ""
+        if tf_type: tf_rows += f'<div class="rlbl">{lbl_tf_type}</div><div class="rval">{tf_type}</div>'
+        if tf_ref:  tf_rows += f'<div class="rlbl">{lbl_tf_ref}</div><div class="rval">{tf_ref}</div>'
+        grid_amounts = (
+            f'<div class="section-head">{lbl_tf_section}</div>'
+            f'{tf_rows}'
+            f'<div class="rlbl">{lbl_amount}</div><div class="rval credit-val">{fmt(entry["amount"])}</div>'
+            f'<div class="rlbl">{lbl_remaining}</div><div class="rval balance-val">{fmt(bal_after)}</div>'
+        )
 
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
-<title>Receipt – {member['name']}</title><style>
-  {PRINT_CSS}
-  .sub{{font-size:15px;color:#555;margin-bottom:20px;}}
-  table{{border-collapse:collapse;}}
-  td{{padding:5px 16px 5px 0;vertical-align:top;}}
-  td:first-child{{font-weight:600;color:#555;white-space:nowrap;min-width:110px;}}
-  .amount{{font-size:24px;font-weight:bold;color:{colour};}}
-  .bal{{font-size:20px;font-weight:bold;}}
-  hr{{border:none;border-top:1px solid #ccc;margin:16px 0;}}
-</style></head><body>
+<title>Receipt – {member['name']}</title><style>{RECEIPT_CSS}</style></head><body>
 {_print_controls()}
 <div class="no-print controls" style="margin-top:0">
   <button class="print-btn" onclick="window.print()">Print Receipt</button>
 </div>
-<h1>{club}</h1><div class="sub">{type_label} Receipt</div><hr>
-<table>
-  <tr><td>Member</td><td><strong>{member['name']}</strong></td></tr>
-  <tr><td>Member #</td><td>{member['member_number']}</td></tr>
-  <tr><td>Type</td><td>{type_label}</td></tr>
-  <tr><td>Amount</td><td class="amount">{fmt(entry['amount'])}</td></tr>
-  <tr><td>Balance after</td><td class="bal">{fmt(bal_after)}</td></tr>
-  <tr><td>Staff</td><td>{entry['staff_name']}</td></tr>
-  <tr><td>Note</td><td>{entry['note'] or '—'}</td></tr>
-  <tr><td>Date / Time</td><td>{entry['created_at']} UTC</td></tr>
-</table>
+{_biz_header_html(s)}
+<hr>
+<div class="receipt-title">{title}</div>
+<div class="member-section">
+  <div class="member-name">{member['name']}</div>
+  <div class="member-num">#{member['member_number']}</div>
+</div>
+<hr>
+<div class="receipt-grid">{grid_details}</div>
+<hr>
+<div class="receipt-grid">{grid_amounts}</div>
+<hr>
 {('<div class="footer">' + footer + '</div>') if footer else ''}
 {_print_size_script()}</body></html>"""
 
@@ -882,8 +1069,9 @@ def update_admin_settings(body: AppSettingsUpdate, user: dict = Depends(admin_us
 @app.get("/config")
 def get_config():
     s = dict(_settings)
-    # expose currency_major as currency_unit so common.js .currency-unit spans still work
     s["currency_unit"] = s.get("currency_major", "pounds")
+    raw_tt = s.get("transfer_types", "Bank Transfer,Cash,QR")
+    s["transfer_types"] = [t.strip() for t in raw_tt.split(",") if t.strip()]
     return s
 
 if __name__ == "__main__":

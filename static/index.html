@@ -98,7 +98,17 @@
           <input type="number" id="cashierAmount" placeholder="e.g. 10.00" min="0.01" step="0.01">
         </div>
         <div class="form-row">
-          <label>Note (optional)</label>
+          <label>Transfer Type</label>
+          <select id="cashierTransferType">
+            <option value="">— select —</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Transfer Reference <span class="label-hint">(optional)</span></label>
+          <input type="text" id="cashierTransferRef" placeholder="">
+        </div>
+        <div class="form-row">
+          <label>Note <span class="label-hint">(optional)</span></label>
           <input type="text" id="cashierNote" placeholder="">
         </div>
         <button class="btn btn-primary" onclick="doTopup()">Top Up</button>
@@ -116,7 +126,17 @@
           <input type="password" id="withdrawalPin" placeholder="" autocomplete="off">
         </div>
         <div class="form-row">
-          <label>Note (optional)</label>
+          <label>Transfer Type</label>
+          <select id="withdrawalTransferType">
+            <option value="">— select —</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Transfer Reference <span class="label-hint">(optional)</span></label>
+          <input type="text" id="withdrawalTransferRef" placeholder="">
+        </div>
+        <div class="form-row">
+          <label>Note <span class="label-hint">(optional)</span></label>
           <input type="text" id="withdrawalNote" placeholder="">
         </div>
         <button class="btn btn-danger" onclick="doWithdrawal()">Withdraw</button>
@@ -166,6 +186,8 @@
   <div class="panel">
     <h2>App Settings</h2>
     <form id="settingsForm">
+
+      <h3 class="sub-heading">General</h3>
       <div class="form-row"><label>Club Name</label>
         <input type="text" id="s-club-name"></div>
       <div class="form-row"><label>Currency Symbol</label>
@@ -182,8 +204,6 @@
         <input type="number" id="s-max-topup" step="0.01"></div>
       <div class="form-row"><label>Maximum single charge <span class="label-hint" id="s-charge-hint"></span></label>
         <input type="number" id="s-max-charge" step="0.01"></div>
-      <div class="form-row"><label>Receipt footer text <span class="label-hint">(optional)</span></label>
-        <textarea id="s-receipt-footer" rows="2" placeholder="Printed at the bottom of every receipt and statement"></textarea></div>
       <div class="form-row">
         <label>Overdraft (bar charges)</label>
         <select id="s-overdraft-policy">
@@ -194,7 +214,68 @@
           <option value="staff_block">Default allowed — staff may block per charge</option>
         </select>
       </div>
-      <button type="submit" class="btn btn-primary">Save Settings</button>
+
+      <div class="panel-divider"></div>
+      <h3 class="sub-heading">Business Address</h3>
+      <div class="form-row"><label>Address line 1</label><input type="text" id="s-biz-address1"></div>
+      <div class="form-row"><label>Address line 2</label><input type="text" id="s-biz-address2"></div>
+      <div class="form-row"><label>Address line 3</label><input type="text" id="s-biz-address3"></div>
+      <div class="form-row"><label>Address line 4</label><input type="text" id="s-biz-address4"></div>
+      <div class="form-row"><label>Country</label><input type="text" id="s-biz-country"></div>
+      <div class="form-row"><label>Phone</label><input type="text" id="s-biz-phone"></div>
+      <div class="form-row"><label>Email</label><input type="text" id="s-biz-email"></div>
+      <div class="form-row"><label>Website</label><input type="text" id="s-biz-website"></div>
+
+      <div class="panel-divider"></div>
+      <h3 class="sub-heading">Branding</h3>
+      <div class="form-row"><label>Logo URL <span class="label-hint">(optional)</span></label>
+        <input type="text" id="s-logo-url" placeholder="https://..."></div>
+      <div class="form-row"><label>Logo alignment</label>
+        <select id="s-logo-align">
+          <option value="left">Left</option>
+          <option value="center">Center</option>
+          <option value="right">Right</option>
+        </select>
+      </div>
+      <div class="form-row"><label>Bar venue name</label>
+        <input type="text" id="s-bar-name" placeholder="Bar"></div>
+      <div class="form-row"><label>Cashier venue name</label>
+        <input type="text" id="s-cashier-name" placeholder="Cashier"></div>
+
+      <div class="panel-divider"></div>
+      <h3 class="sub-heading">Transactions</h3>
+      <div class="form-row"><label>Transaction reference prefix</label>
+        <input type="text" id="s-txn-ref-prefix" placeholder="TXN" style="max-width:120px"></div>
+      <div class="form-row"><label>Transfer types <span class="label-hint">(comma-separated)</span></label>
+        <input type="text" id="s-transfer-types" placeholder="Bank Transfer,Cash,QR"></div>
+
+      <div class="panel-divider"></div>
+      <h3 class="sub-heading">Receipt Labels <span class="label-hint">(for localisation)</span></h3>
+      <div class="form-row"><label>Receipt title (charge)</label><input type="text" id="s-lbl-receipt" placeholder="RECEIPT"></div>
+      <div class="form-row"><label>Receipt title (top-up)</label><input type="text" id="s-lbl-topup-receipt" placeholder="TOP-UP RECEIPT"></div>
+      <div class="form-row"><label>Receipt title (withdrawal)</label><input type="text" id="s-lbl-withdrawal-receipt" placeholder="WITHDRAWAL RECEIPT"></div>
+      <div class="form-row"><label>Staff label</label><input type="text" id="s-lbl-staff" placeholder="STAFF"></div>
+      <div class="form-row"><label>Transaction label</label><input type="text" id="s-lbl-transaction" placeholder="TRANSACTION"></div>
+      <div class="form-row"><label>Charge/venue label</label><input type="text" id="s-lbl-charge" placeholder="CHARGE"></div>
+      <div class="form-row"><label>Transaction time label</label><input type="text" id="s-lbl-txn-time" placeholder="TRANSACTION TIME"></div>
+      <div class="form-row"><label>Amount charged label</label><input type="text" id="s-lbl-amount-charged" placeholder="AMOUNT CHARGED"></div>
+      <div class="form-row"><label>Remaining balance label</label><input type="text" id="s-lbl-remaining-balance" placeholder="REMAINING BALANCE"></div>
+      <div class="form-row"><label>Balance transfer section header</label><input type="text" id="s-lbl-balance-transfer" placeholder="BALANCE TRANSFER"></div>
+      <div class="form-row"><label>Amount topped-up label</label><input type="text" id="s-lbl-amount-topup" placeholder="AMOUNT TOPPED-UP"></div>
+      <div class="form-row"><label>Amount withdrawn label</label><input type="text" id="s-lbl-amount-withdrawal" placeholder="AMOUNT WITHDRAWN"></div>
+      <div class="form-row"><label>Transfer type label</label><input type="text" id="s-lbl-transfer-type" placeholder="TRANSFER TYPE"></div>
+      <div class="form-row"><label>Transfer reference label</label><input type="text" id="s-lbl-transfer-ref" placeholder="TRANSFER REFERENCE"></div>
+
+      <div class="panel-divider"></div>
+      <h3 class="sub-heading">Receipt Footers</h3>
+      <div class="form-row"><label>Footer — all <span class="label-hint">(fallback for all receipts and statement)</span></label>
+        <textarea id="s-receipt-footer" rows="2" placeholder="Printed at the bottom of every receipt and statement"></textarea></div>
+      <div class="form-row"><label>Footer — charge receipts <span class="label-hint">(overrides all-footer for bar charges)</span></label>
+        <textarea id="s-receipt-footer-charge" rows="2"></textarea></div>
+      <div class="form-row"><label>Footer — cashier receipts <span class="label-hint">(overrides all-footer for top-ups and withdrawals)</span></label>
+        <textarea id="s-receipt-footer-cashier" rows="2"></textarea></div>
+
+      <button type="submit" class="btn btn-primary" style="margin-top:8px">Save Settings</button>
     </form>
     <div id="settingsMsg" class="msg"></div>
   </div>
