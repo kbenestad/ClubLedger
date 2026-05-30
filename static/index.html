@@ -17,6 +17,7 @@
 
 <!-- ===================== MEMBERS VIEW ===================== -->
 <div id="view-members" class="view">
+
   <div class="panel">
     <h2>Register New Member</h2>
     <form id="registerForm">
@@ -38,16 +39,29 @@
   </div>
 
   <div class="panel">
-    <h2>Member Search</h2>
+    <h2>Members</h2>
     <div class="search-row">
       <input type="text" id="memberSearch" placeholder="Search name or number…">
       <button class="btn" onclick="searchMembers()">Search</button>
     </div>
     <table id="memberTable" class="data-table">
-      <thead><tr><th>#</th><th>Name</th><th>Balance</th><th>Joined</th><th></th></tr></thead>
+      <thead>
+        <tr><th>#</th><th>Name</th><th>Balance</th><th>Joined</th><th class="actions-col"></th></tr>
+      </thead>
       <tbody></tbody>
     </table>
   </div>
+
+  <div class="panel">
+    <h2>Staff</h2>
+    <div class="search-row">
+      <input type="text" id="staffNameInput" placeholder="Staff name">
+      <button class="btn btn-primary" onclick="addStaff()">Add</button>
+    </div>
+    <div id="staffChips" class="staff-chips"></div>
+    <div id="staffMsg" class="msg"></div>
+  </div>
+
 </div>
 
 <!-- ===================== CASHIER VIEW ===================== -->
@@ -67,8 +81,8 @@
         <input type="number" id="cashierAmount" placeholder="e.g. 1000" min="1" step="1">
       </div>
       <div class="form-row">
-        <label>Staff Name</label>
-        <input type="text" id="cashierStaff" placeholder="Your name">
+        <label>Staff</label>
+        <select id="cashierStaff"></select>
       </div>
       <div class="form-row">
         <label>Note (optional)</label>
@@ -94,7 +108,6 @@
     <div id="barForm" class="hidden">
       <div class="selected-member-box" id="barSelected"></div>
 
-      <!-- Product search -->
       <div class="form-row">
         <label>Product Search</label>
         <input type="text" id="barProductSearch" placeholder="Search products…" oninput="barProductLookup()">
@@ -110,8 +123,8 @@
         <input type="password" id="barPin" placeholder="Member PIN" maxlength="20">
       </div>
       <div class="form-row">
-        <label>Staff Name</label>
-        <input type="text" id="barStaff" placeholder="Your name">
+        <label>Staff</label>
+        <select id="barStaff"></select>
       </div>
       <div class="form-row">
         <label>Note (optional)</label>
@@ -124,6 +137,33 @@
   </div>
 </div>
 
+<!-- ===================== EDIT MODAL ===================== -->
+<div id="editModal" class="modal-overlay hidden" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal">
+    <h3>Edit Member</h3>
+    <form id="editForm">
+      <div class="form-row">
+        <label>Member Number</label>
+        <input type="text" id="edit-number" required>
+      </div>
+      <div class="form-row">
+        <label>Full Name</label>
+        <input type="text" id="edit-name" required>
+      </div>
+      <div class="form-row">
+        <label>New PIN <span style="font-weight:400;color:#aaa">(leave blank to keep current)</span></label>
+        <input type="password" id="edit-pin" placeholder="Leave blank to keep">
+      </div>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <button type="button" class="btn" onclick="closeEditModal()">Cancel</button>
+      </div>
+    </form>
+    <div id="editMsg" class="msg"></div>
+  </div>
+</div>
+
+<script src="/static/common.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

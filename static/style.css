@@ -189,6 +189,31 @@ nav {
 }
 .form-row select:focus { border-color: var(--primary); }
 
+/* ---- Row action buttons ---- */
+.row-actions { white-space: nowrap; }
+.row-btn { padding: 4px 10px !important; font-size: .82rem !important; margin-right: 4px !important; }
+
+/* ---- Edit modal ---- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+.modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 28px 32px;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  box-shadow: 0 20px 60px rgba(0,0,0,.3);
+}
+.modal h3 { font-size: 1.1rem; margin-bottom: 18px; }
+.modal-actions { display: flex; gap: 8px; margin-top: 18px; }
+
 /* ---- Messages ---- */
 .msg { margin-top: 12px; padding: 10px 14px; border-radius: 6px; font-size: .93rem; }
 .msg:empty { display: none; }

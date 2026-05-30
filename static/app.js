@@ -1,22 +1,21 @@
-/* ClubLedger – frontend */
+/* ClubLedger – main SPA */
 
-let cfg = { currency_unit: 'pence', currency_symbol: '£', currency_divisor: 100, club_name: 'ClubLedger' };
 let cashierMember = null;
-let barMember = null;
+let barMember     = null;
+let editMemberId  = null;
 
 // ---------------------------------------------------------------------------
 // Boot
 // ---------------------------------------------------------------------------
 (async function init() {
+  await loadConfig();
+  await loadStaffInto('cashierStaff');
+  await loadStaffInto('barStaff');
+
   try {
-    const r = await fetch('/config');
-    cfg = await r.json();
-    document.getElementById('navBrand').textContent = cfg.club_name;
-    document.title = cfg.club_name;
-    document.querySelectorAll('.currency-unit').forEach(el => {
-      el.textContent = cfg.currency_unit;
-    });
-  } catch (e) { /* use defaults */ }
+    const data = await apiFetch('/staff');
+    renderStaffChips(data.staff);
+  } catch (e) { /* ignore */ }
 
   // Nav
   document.querySelectorAll('.nav-btn').forEach(btn => {
@@ -28,51 +27,30 @@ let barMember = null;
     });
   });
 
-  // Register form
   document.getElementById('registerForm').addEventListener('submit', async e => {
     e.preventDefault();
     await registerMember();
   });
+  document.getElementById('editForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    await saveEdit();
+  });
 
-  // Enter key on search fields
-  document.getElementById('memberSearch').addEventListener('keydown', e => { if (e.key === 'Enter') searchMembers(); });
+  document.getElementById('memberSearch').addEventListener('keydown',  e => { if (e.key === 'Enter') searchMembers(); });
   document.getElementById('cashierSearch').addEventListener('keydown', e => { if (e.key === 'Enter') cashierSearchMembers(); });
-  document.getElementById('barSearch').addEventListener('keydown', e => { if (e.key === 'Enter') barSearchMembers(); });
+  document.getElementById('barSearch').addEventListener('keydown',     e => { if (e.key === 'Enter') barSearchMembers(); });
+  document.getElementById('staffNameInput').addEventListener('keydown',e => { if (e.key === 'Enter') addStaff(); });
 
   searchMembers();
 })();
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-function fmtAmount(pence) {
-  return cfg.currency_symbol + (pence / cfg.currency_divisor).toFixed(2);
-}
-
-function balanceClass(v) {
-  return v < 0 ? 'balance-neg' : 'balance-pos';
-}
-
-function setMsg(id, text, type) {
-  const el = document.getElementById(id);
-  el.textContent = text;
-  el.className = 'msg ' + (type || '');
-}
-
-async function apiFetch(url, opts) {
-  const r = await fetch(url, opts);
-  const json = await r.json();
-  if (!r.ok) throw new Error(json.detail || 'Server error');
-  return json;
-}
 
 // ---------------------------------------------------------------------------
 // Members view
 // ---------------------------------------------------------------------------
 async function registerMember() {
   const number = document.getElementById('reg-number').value.trim();
-  const name = document.getElementById('reg-name').value.trim();
-  const pin = document.getElementById('reg-pin').value;
+  const name   = document.getElementById('reg-name').value.trim();
+  const pin    = document.getElementById('reg-pin').value;
   if (!number || !name || !pin) { setMsg('registerMsg', 'All fields required.', 'err'); return; }
   try {
     const m = await apiFetch('/members', {
@@ -94,24 +72,80 @@ async function searchMembers() {
   try {
     const members = await apiFetch(url);
     renderMemberTable(members);
-  } catch (e) {
-    console.error(e);
-  }
+  } catch (e) { console.error(e); }
 }
 
 function renderMemberTable(members) {
   const tbody = document.querySelector('#memberTable tbody');
-  if (!members.length) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888">No members found</td></tr>'; return; }
+  if (!members.length) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888">No members found</td></tr>';
+    return;
+  }
   tbody.innerHTML = members.map(m => `
     <tr>
       <td>${esc(m.member_number)}</td>
       <td>${esc(m.name)}</td>
       <td class="num ${balanceClass(m.balance)}">${esc(m.balance_display)}</td>
-      <td>${m.created_at ? m.created_at.slice(0,10) : ''}</td>
-      <td>
-        <a href="/members/${m.id}/statement" target="_blank" class="btn" style="padding:4px 10px;font-size:.82rem">Statement</a>
+      <td>${m.created_at ? m.created_at.slice(0, 10) : ''}</td>
+      <td class="row-actions">
+        <a href="/members/${m.id}/statement" target="_blank" class="btn row-btn">Statement</a>
+        <button class="btn row-btn" onclick="openEditModal(${m.id},'${esc(m.name)}','${esc(m.member_number)}')">Edit</button>
+        ${m.balance === 0
+          ? `<button class="btn btn-danger row-btn" onclick="deleteMember(${m.id},'${esc(m.name)}')">Delete</button>`
+          : ''}
       </td>
     </tr>`).join('');
+}
+
+// ---------------------------------------------------------------------------
+// Edit member
+// ---------------------------------------------------------------------------
+function openEditModal(id, name, number) {
+  editMemberId = id;
+  document.getElementById('edit-number').value = number;
+  document.getElementById('edit-name').value   = name;
+  document.getElementById('edit-pin').value    = '';
+  setMsg('editMsg', '', '');
+  document.getElementById('editModal').classList.remove('hidden');
+  document.getElementById('edit-name').focus();
+}
+
+function closeEditModal() {
+  editMemberId = null;
+  document.getElementById('editModal').classList.add('hidden');
+}
+
+async function saveEdit() {
+  if (!editMemberId) return;
+  const number = document.getElementById('edit-number').value.trim();
+  const name   = document.getElementById('edit-name').value.trim();
+  const pin    = document.getElementById('edit-pin').value;
+  const body   = { member_number: number, name };
+  if (pin) body.pin = pin;
+  try {
+    await apiFetch(`/members/${editMemberId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    closeEditModal();
+    searchMembers();
+  } catch (e) {
+    setMsg('editMsg', e.message, 'err');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Delete member
+// ---------------------------------------------------------------------------
+async function deleteMember(id, name) {
+  if (!confirm(`Delete member "${name}"?\n\nThis will permanently remove their account and transaction history.`)) return;
+  try {
+    await apiFetch(`/members/${id}`, { method: 'DELETE' });
+    searchMembers();
+  } catch (e) {
+    alert(e.message);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -124,7 +158,7 @@ async function cashierSearchMembers() {
     const members = await apiFetch(url);
     const list = document.getElementById('cashierMemberList');
     list.innerHTML = members.map(m => `
-      <div class="member-pick-item" onclick="selectCashierMember(${m.id}, '${esc(m.name)}', '${esc(m.member_number)}', ${m.balance}, '${esc(m.balance_display)}')">
+      <div class="member-pick-item" onclick="selectCashierMember(${m.id},'${esc(m.name)}','${esc(m.member_number)}',${m.balance},'${esc(m.balance_display)}')">
         <div>
           <div class="member-pick-name">${esc(m.name)}</div>
           <div class="member-pick-sub">#${esc(m.member_number)}</div>
@@ -147,27 +181,26 @@ function clearCashierSelection() {
   cashierMember = null;
   document.getElementById('cashierForm').classList.add('hidden');
   document.getElementById('cashierAmount').value = '';
-  document.getElementById('cashierStaff').value = '';
-  document.getElementById('cashierNote').value = '';
+  document.getElementById('cashierNote').value   = '';
   setMsg('cashierMsg', '', '');
 }
 
 async function doTopup() {
   if (!cashierMember) return;
   const amount = parseInt(document.getElementById('cashierAmount').value, 10);
-  const staff = document.getElementById('cashierStaff').value.trim();
-  const note = document.getElementById('cashierNote').value.trim();
+  const staff  = document.getElementById('cashierStaff').value;
+  const note   = document.getElementById('cashierNote').value.trim();
   if (!amount || isNaN(amount) || amount <= 0) { setMsg('cashierMsg', 'Enter a valid amount.', 'err'); return; }
-  if (!staff) { setMsg('cashierMsg', 'Staff name required.', 'err'); return; }
+  if (!staff) { setMsg('cashierMsg', 'Select a staff member.', 'err'); return; }
   try {
     const r = await apiFetch('/topup', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: cashierMember.id, amount, staff_name: staff, note: note || null })
     });
+    window.open(`/receipt/${r.entry_id}`, '_blank');
     setMsg('cashierMsg', `Top-up complete. New balance: ${r.new_balance_display}`, 'ok');
     clearCashierSelection();
-    searchMembers();
   } catch (e) {
     setMsg('cashierMsg', e.message, 'err');
   }
@@ -183,7 +216,7 @@ async function barSearchMembers() {
     const members = await apiFetch(url);
     const list = document.getElementById('barMemberList');
     list.innerHTML = members.map(m => `
-      <div class="member-pick-item" onclick="selectBarMember(${m.id}, '${esc(m.name)}', '${esc(m.member_number)}', ${m.balance}, '${esc(m.balance_display)}')">
+      <div class="member-pick-item" onclick="selectBarMember(${m.id},'${esc(m.name)}','${esc(m.member_number)}',${m.balance},'${esc(m.balance_display)}')">
         <div>
           <div class="member-pick-name">${esc(m.name)}</div>
           <div class="member-pick-sub">#${esc(m.member_number)}</div>
@@ -208,9 +241,8 @@ function clearBarSelection() {
   barMember = null;
   document.getElementById('barForm').classList.add('hidden');
   document.getElementById('barAmount').value = '';
-  document.getElementById('barPin').value = '';
-  document.getElementById('barStaff').value = '';
-  document.getElementById('barNote').value = '';
+  document.getElementById('barPin').value    = '';
+  document.getElementById('barNote').value   = '';
   document.getElementById('barProductSearch').value = '';
   document.getElementById('barProductResults').innerHTML = '';
   setMsg('barMsg', '', '');
@@ -225,9 +257,12 @@ async function barProductLookup() {
     try {
       const products = await apiFetch(`/products?q=${encodeURIComponent(q)}`);
       const div = document.getElementById('barProductResults');
-      if (!products.length) { div.innerHTML = '<div style="color:#888;font-size:.88rem;padding:4px">No products found</div>'; return; }
+      if (!products.length) {
+        div.innerHTML = '<div style="color:#888;font-size:.88rem;padding:4px">No products found</div>';
+        return;
+      }
       div.innerHTML = products.map(p => `
-        <div class="product-item" onclick="selectProduct(${p.price}, ${p.member_price || p.price}, '${esc(p.name)}${p.brand ? ' – '+esc(p.brand) : ''}')">
+        <div class="product-item" onclick="selectProduct(${p.price},${p.member_price || p.price},'${esc(p.name)}${p.brand ? ' – ' + esc(p.brand) : ''}')">
           <div>
             <strong>${esc(p.name)}</strong>${p.brand ? ` <span style="color:#888">– ${esc(p.brand)}</span>` : ''}
             ${p.search_tags ? `<div style="font-size:.78rem;color:#aaa">${esc(p.search_tags)}</div>` : ''}
@@ -243,7 +278,7 @@ async function barProductLookup() {
 
 function selectProduct(price, memberPrice, label) {
   document.getElementById('barAmount').value = memberPrice;
-  document.getElementById('barNote').value = label;
+  document.getElementById('barNote').value   = label;
   document.getElementById('barProductResults').innerHTML = '';
   document.getElementById('barProductSearch').value = '';
 }
@@ -251,35 +286,22 @@ function selectProduct(price, memberPrice, label) {
 async function doCharge() {
   if (!barMember) return;
   const amount = parseInt(document.getElementById('barAmount').value, 10);
-  const pin = document.getElementById('barPin').value;
-  const staff = document.getElementById('barStaff').value.trim();
-  const note = document.getElementById('barNote').value.trim();
+  const pin    = document.getElementById('barPin').value;
+  const staff  = document.getElementById('barStaff').value;
+  const note   = document.getElementById('barNote').value.trim();
   if (!amount || isNaN(amount) || amount <= 0) { setMsg('barMsg', 'Enter a valid amount.', 'err'); return; }
-  if (!pin) { setMsg('barMsg', 'PIN required.', 'err'); return; }
-  if (!staff) { setMsg('barMsg', 'Staff name required.', 'err'); return; }
+  if (!pin)   { setMsg('barMsg', 'PIN required.', 'err'); return; }
+  if (!staff) { setMsg('barMsg', 'Select a staff member.', 'err'); return; }
   try {
     const r = await apiFetch('/charge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ member_id: barMember.id, amount, pin, staff_name: staff, note: note || null })
     });
+    window.open(`/receipt/${r.entry_id}`, '_blank');
     setMsg('barMsg', `Charge complete. New balance: ${r.new_balance_display}`, 'ok');
     clearBarSelection();
-    searchMembers();
   } catch (e) {
     setMsg('barMsg', e.message, 'err');
   }
-}
-
-// ---------------------------------------------------------------------------
-// XSS-safe escape
-// ---------------------------------------------------------------------------
-function esc(str) {
-  if (str == null) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }

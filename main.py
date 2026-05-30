@@ -188,13 +188,18 @@ class ProductCreate(BaseModel):
 class StaffAdd(BaseModel):
     name: str
 
+class MemberUpdate(BaseModel):
+    member_number: Optional[str] = None
+    name: Optional[str] = None
+    pin: Optional[str] = None
+
 # ---------------------------------------------------------------------------
 # Page routes
 # ---------------------------------------------------------------------------
 
-@app.get("/", response_class=RedirectResponse)
+@app.get("/", response_class=HTMLResponse)
 async def root():
-    return RedirectResponse(url="/cashier", status_code=302)
+    return (static_dir / "index.html").read_text()
 
 @app.get("/cashier", response_class=HTMLResponse)
 async def cashier_page():
@@ -231,6 +236,54 @@ def create_member(body: MemberCreate):
             "name": row["name"],
             "created_at": row["created_at"],
         }
+
+@app.put("/members/{member_id}")
+def update_member(member_id: int, body: MemberUpdate):
+    with db_conn() as conn:
+        member = conn.execute("SELECT * FROM members WHERE id=?", (member_id,)).fetchone()
+        if not member:
+            raise HTTPException(404, "Member not found")
+        updates = {}
+        if body.name is not None:
+            name = body.name.strip()
+            if not name:
+                raise HTTPException(400, "Name cannot be empty")
+            updates["name"] = name
+        if body.member_number is not None:
+            mn = body.member_number.strip()
+            if not mn:
+                raise HTTPException(400, "Member number cannot be empty")
+            clash = conn.execute(
+                "SELECT id FROM members WHERE member_number=? AND id!=?", (mn, member_id)
+            ).fetchone()
+            if clash:
+                raise HTTPException(400, "Member number already in use")
+            updates["member_number"] = mn
+        if body.pin is not None:
+            if len(body.pin) < 4:
+                raise HTTPException(400, "PIN must be at least 4 characters")
+            updates["pin_hash"] = hash_pin(body.pin)
+        if updates:
+            set_clause = ", ".join(f"{k}=?" for k in updates)
+            conn.execute(
+                f"UPDATE members SET {set_clause} WHERE id=?",
+                list(updates.values()) + [member_id]
+            )
+        row = conn.execute("SELECT * FROM members WHERE id=?", (member_id,)).fetchone()
+        return {"id": row["id"], "member_number": row["member_number"], "name": row["name"]}
+
+@app.delete("/members/{member_id}")
+def delete_member(member_id: int):
+    with db_conn() as conn:
+        member = conn.execute("SELECT * FROM members WHERE id=?", (member_id,)).fetchone()
+        if not member:
+            raise HTTPException(404, "Member not found")
+        balance = member_balance(conn, member_id)
+        if balance != 0:
+            raise HTTPException(400, f"Cannot delete: balance is {format_amount(balance)}")
+        conn.execute("DELETE FROM ledger_entries WHERE member_id=?", (member_id,))
+        conn.execute("DELETE FROM members WHERE id=?", (member_id,))
+        return {"ok": True}
 
 @app.get("/members")
 def list_members(q: Optional[str] = None):
