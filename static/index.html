@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClubLedger</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<!-- ===================== LOGIN OVERLAY ===================== -->
+<div id="loginOverlay" class="login-overlay hidden">
+  <div class="login-card">
+    <h1 id="loginBrand">ClubLedger</h1>
+    <p class="login-sub">Staff sign in</p>
+    <form id="loginForm">
+      <div class="form-row">
+        <label>Username</label>
+        <input type="text" id="loginUsername" autocomplete="username" required>
+      </div>
+      <div class="form-row">
+        <label>Password</label>
+        <input type="password" id="loginPassword" autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;margin-top:4px">Sign In</button>
+    </form>
+    <div id="loginMsg" class="msg"></div>
+  </div>
+</div>
+
+<!-- ===================== NAV ===================== -->
+<nav>
+  <span class="brand" id="navBrand">ClubLedger</span>
+  <button class="nav-btn active" data-view="members">Members</button>
+  <button class="nav-btn" data-view="cashier">Cashier</button>
+  <button class="nav-btn" data-view="bar">Bar</button>
+  <button class="nav-btn hidden" data-view="admin" id="adminTabBtn">Admin</button>
+  <div class="nav-right">
+    <span class="nav-user" id="navUser"></span>
+    <button class="nav-logout" onclick="doLogout()">Sign out</button>
+  </div>
+</nav>
+
+<!-- ===================== MEMBERS VIEW ===================== -->
+<div id="view-members" class="view">
+
+  <div class="panel">
+    <h2>Register New Member</h2>
+    <form id="registerForm">
+      <div class="form-row">
+        <label>Member Number</label>
+        <input type="text" id="reg-number" placeholder="e.g. 001" required>
+      </div>
+      <div class="form-row">
+        <label>Full Name</label>
+        <input type="text" id="reg-name" placeholder="Name" required>
+      </div>
+      <div class="form-row">
+        <label>PIN</label>
+        <input type="password" id="reg-pin" placeholder="Min 4 digits" required>
+      </div>
+      <button type="submit" class="btn btn-primary">Register</button>
+    </form>
+    <div id="registerMsg" class="msg"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Members</h2>
+    <div class="search-row">
+      <input type="text" id="memberSearch" placeholder="Search name or number…">
+      <button class="btn" onclick="searchMembers()">Search</button>
+    </div>
+    <table id="memberTable" class="data-table">
+      <thead><tr><th>#</th><th>Name</th><th>Balance</th><th>Joined</th><th class="actions-col"></th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+</div>
+
+<!-- ===================== CASHIER VIEW ===================== -->
+<div id="view-cashier" class="view hidden">
+  <div class="panel">
+    <h2>Top Up Account</h2>
+    <div class="search-row">
+      <input type="text" id="cashierSearch" placeholder="Search member…">
+      <button class="btn" onclick="cashierSearchMembers()">Search</button>
+    </div>
+    <div id="cashierMemberList" class="member-pick-list"></div>
+
+    <div id="cashierForm" class="hidden">
+      <div class="selected-member-box" id="cashierSelected"></div>
+
+      <div class="cashier-action-panel">
+        <h3>Top Up</h3>
+        <div class="form-row">
+          <label>Amount (<span class="currency-unit"></span>)</label>
+          <input type="number" id="cashierAmount" placeholder="e.g. 10.00" min="0.01" step="0.01">
+        </div>
+        <div class="form-row">
+          <label>Transfer Type</label>
+          <select id="cashierTransferType">
+            <option value="">&mdash; select &mdash;</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Transfer Reference <span class="label-hint">(optional)</span></label>
+          <input type="text" id="cashierTransferRef" placeholder="">
+        </div>
+        <div class="form-row">
+          <label>Note <span class="label-hint">(optional)</span></label>
+          <input type="text" id="cashierNote" placeholder="">
+        </div>
+        <button class="btn btn-primary" onclick="doTopup()">Top Up</button>
+        <div id="cashierTopupMsg" class="msg"></div>
+      </div>
+
+      <div class="cashier-action-panel">
+        <h3>Withdrawal</h3>
+        <div class="form-row">
+          <label>Amount (<span class="currency-unit"></span>)</label>
+          <input type="number" id="withdrawalAmount" placeholder="e.g. 10.00" min="0.01" step="0.01">
+        </div>
+        <div class="form-row">
+          <label>Member PIN</label>
+          <input type="password" id="withdrawalPin" placeholder="" autocomplete="off">
+        </div>
+        <div class="form-row">
+          <label>Transfer Type</label>
+          <select id="withdrawalTransferType">
+            <option value="">&mdash; select &mdash;</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label>Transfer Reference <span class="label-hint">(optional)</span></label>
+          <input type="text" id="withdrawalTransferRef" placeholder="">
+        </div>
+        <div class="form-row">
+          <label>Note <span class="label-hint">(optional)</span></label>
+          <input type="text" id="withdrawalNote" placeholder="">
+        </div>
+        <button class="btn btn-danger" onclick="doWithdrawal()">Withdraw</button>
+        <div id="cashierWithdrawalMsg" class="msg"></div>
+      </div>
+
+      <button class="btn" onclick="clearCashierSelection()" style="margin-top:8px">Cancel</button>
+    </div>
+    <div id="cashierMsg" class="msg"></div>
+  </div>
+</div>
+
+<!-- ===================== BAR VIEW ===================== -->
+<div id="view-bar" class="view hidden">
+  <div class="panel">
+    <h2>Charge Account</h2>
+    <div class="search-row">
+      <input type="text" id="barSearch" placeholder="Search member…">
+      <button class="btn" onclick="barSearchMembers()">Search</button>
+    </div>
+    <div id="barMemberList" class="member-pick-list"></div>
+
+    <div id="barForm" class="hidden">
+      <div class="selected-member-box" id="barSelected"></div>
+      <div class="form-row">
+        <label>Amount (<span class="currency-unit"></span>)</label>
+        <input type="number" id="barAmount" placeholder="e.g. 3.50" min="0.01" step="0.01">
+      </div>
+      <div class="form-row">
+        <label>Member PIN</label>
+        <input type="password" id="barPin" placeholder="Member PIN" maxlength="20">
+      </div>
+      <div class="form-row">
+        <label>Note (optional)</label>
+        <input type="text" id="barNote" placeholder="">
+      </div>
+      <button class="btn btn-danger" onclick="doCharge()">Charge</button>
+      <button class="btn" onclick="clearBarSelection()">Cancel</button>
+    </div>
+    <div id="barMsg" class="msg"></div>
+  </div>
+</div>
+
+<!-- ===================== ADMIN VIEW ===================== -->
+<div id="view-admin" class="view hidden">
+
+  <div class="panel">
+    <h2>App Settings</h2>
+    <form id="settingsForm">
+
+      <h3 class="sub-heading">General</h3>
+      <div class="form-row"><label>Club Name</label>
+        <input type="text" id="s-club-name"></div>
+      <div class="form-row"><label>Currency Symbol</label>
+        <input type="text" id="s-currency-symbol" style="max-width:80px"></div>
+      <div class="form-row"><label>Currency Name <span class="label-hint">(major unit, e.g. pounds)</span></label>
+        <input type="text" id="s-currency-major" placeholder="pounds"></div>
+      <div class="form-row"><label>Subunit Name <span class="label-hint">(minor unit, e.g. pence)</span></label>
+        <input type="text" id="s-currency-minor" placeholder="pence"></div>
+      <div class="form-row"><label>Subunits per unit <span class="label-hint">(e.g. 100)</span></label>
+        <input type="number" id="s-currency-divisor" min="1" step="1" style="max-width:100px"></div>
+      <div class="form-row"><label>Minimum top-up <span class="label-hint" id="s-min-hint"></span></label>
+        <input type="number" id="s-min-topup" step="0.01" min="0.01"></div>
+      <div class="form-row"><label>Maximum top-up <span class="label-hint" id="s-max-hint"></span></label>
+        <input type="number" id="s-max-topup" step="0.01"></div>
+      <div class="form-row"><label>Maximum single charge <span class="label-hint" id="s-charge-hint"></span></label>
+        <input type="number" id="s-max-charge" step="0.01"></div>
+      <div class="form-row">
+        <label>Overdraft (bar charges)</label>
+        <select id="s-overdraft-policy">
+          <option value="never">Not allowed</option>
+          <option value="always">Allowed for all</option>
+          <option value="staff_override">Default not allowed &mdash; staff may override per charge</option>
+          <option value="admin_override">Default not allowed &mdash; admin may override per charge</option>
+          <option value="staff_block">Default allowed &mdash; staff may block per charge</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>Timezone <span class="label-hint">(IANA name, e.g. Europe/London, Asia/Bangkok &mdash; default is server timezone)</span></label>
+        <input type="text" id="s-timezone" placeholder="e.g. Europe/London">
+      </div>
+      <div class="form-row">
+        <label>Default paper size <span class="label-hint">(for receipts and statements)</span></label>
+        <select id="s-paper-size">
+          <option value="A4">A4</option>
+          <option value="A5">A5</option>
+        </select>
+      </div>
+
+      <div class="panel-divider"></div>
+      <h3 class="sub-heading">Business Address</h3>
+      <div class="form-row"><label>Address line 1</label><input type="text" id="s-biz-address1"></div>
+      <div class="form-row"><label>Address line 2</label><input type="text" id="s-biz-address2"></div>
+      <div class="form-row"><label>Address line 3</label><input type="text" id="s-biz-address3"></div>
+      <div class="form-row"><label>Address line 4</label><input type="text" id="s-biz-address4"></div>
+      <div class="form-row"><label>Country</label><input type="text" id="s-biz-country"></div>
+      <div class="form-row"><label>Phone</label><input type="text" id="s-biz-phone"></div>
+      <div class="form-row"><label>Email</label><input type="text" id="s-biz-email"></div>
+      <div class="form-row"><label>Website</label><input type="text" id="s-biz-website"></div>
+
+      <div class="panel-divider"></div>
+      <h3 class="sub-heading">Branding</h3>
+      <div class="form-row">
+        <label>Logo <span class="label-hint">(upload image file)</span></label>
+        <input type="file" id="s-logo-upload" accept="image/*" style="padding:4px 0;border:none;background:none;">
+        <div id="logoUploadMsg" class="msg" style="margin-top:4px"></div>
+      </div>
+      <div class="form-row"><label>Logo URL <span class="label-hint">(or paste URL; upload above sets this automatically)</span></label>
+        <input type="text" id="s-logo-url" placeholder="https://..."></div>
+      <div class="form-row">
+        <label>Logo alignment</label>
+        <select id="s-logo-align">
+          <option value="left">Left</option>
+          <option value="center">Center</option>
+          <option value="right">Right</option>
+        </select>
+      </div>
+      <div class="form-row" style="flex-direction:row;gap:24px;align-items:flex-end">
+        <div style="flex:1"><label>Logo max width (px)</label>
+          <input type="number" id="s-logo-max-width" min="20" step="10" placeholder="200"></div>
+        <div style="flex:1"><label>Logo max height (px)</label>
+          <input type="number" id="s-logo-max-height" min="20" step="10" placeholder="80"></div>
+      </div>
+      <div class="form-row"><label>Bar venue name</label>
+        <input type="text" id="s-bar-name" placeholder="Bar"></div>
+      <div class="form-row"><label>Cashier venue name</label>
+        <input type="text" id="s-cashier-name" placeholder="Cashier"></div>
+
+      <div class="panel-divider"></div>
+      <h3 class="sub-heading">Transactions</h3>
+      <div class="form-row"><label>Transaction reference prefix</label>
+        <input type="text" id="s-txn-ref-prefix" placeholder="TXN" style="max-width:120px"></div>
+      <div class="form-row"><label>Transfer types <span class="label-hint">(comma-separated)</span></label>
+        <input type="text" id="s-transfer-types" placeholder="Bank Transfer,Cash,QR"></div>
+
+      <div class="panel-divider"></div>
+      <h3 class="sub-heading">Receipt Labels <span class="label-hint">(for localisation)</span></h3>
+      <div class="form-row"><label>Receipt title (charge)</label><input type="text" id="s-lbl-receipt" placeholder="RECEIPT"></div>
+      <div class="form-row"><label>Receipt title (top-up)</label><input type="text" id="s-lbl-topup-receipt" placeholder="TOP-UP RECEIPT"></div>
+      <div class="form-row"><label>Receipt title (withdrawal)</label><input type="text" id="s-lbl-withdrawal-receipt" placeholder="WITHDRAWAL RECEIPT"></div>
+      <div class="form-row"><label>Staff label</label><input type="text" id="s-lbl-staff" placeholder="STAFF"></div>
+      <div class="form-row"><label>Transaction label</label><input type="text" id="s-lbl-transaction" placeholder="TRANSACTION"></div>
+      <div class="form-row"><label>Charge/venue label</label><input type="text" id="s-lbl-charge" placeholder="CHARGE"></div>
+      <div class="form-row"><label>Transaction time label</label><input type="text" id="s-lbl-txn-time" placeholder="TRANSACTION TIME"></div>
+      <div class="form-row"><label>Amount charged label</label><input type="text" id="s-lbl-amount-charged" placeholder="AMOUNT CHARGED"></div>
+      <div class="form-row"><label>Remaining balance label</label><input type="text" id="s-lbl-remaining-balance" placeholder="REMAINING BALANCE"></div>
+      <div class="form-row"><label>Balance transfer section header</label><input type="text" id="s-lbl-balance-transfer" placeholder="BALANCE TRANSFER"></div>
+      <div class="form-row"><label>Amount topped-up label</label><input type="text" id="s-lbl-amount-topup" placeholder="AMOUNT TOPPED-UP"></div>
+      <div class="form-row"><label>Amount withdrawn label</label><input type="text" id="s-lbl-amount-withdrawal" placeholder="AMOUNT WITHDRAWN"></div>
+      <div class="form-row"><label>Transfer type label</label><input type="text" id="s-lbl-transfer-type" placeholder="TRANSFER TYPE"></div>
+      <div class="form-row"><label>Transfer reference label</label><input type="text" id="s-lbl-transfer-ref" placeholder="TRANSFER REFERENCE"></div>
+
+      <div class="panel-divider"></div>
+      <h3 class="sub-heading">Receipt Footers</h3>
+      <div class="form-row"><label>Footer &mdash; all <span class="label-hint">(fallback for all receipts and statement)</span></label>
+        <textarea id="s-receipt-footer" rows="2" placeholder="Printed at the bottom of every receipt and statement"></textarea></div>
+      <div class="form-row"><label>Footer &mdash; charge receipts <span class="label-hint">(overrides all-footer for bar charges)</span></label>
+        <textarea id="s-receipt-footer-charge" rows="2"></textarea></div>
+      <div class="form-row"><label>Footer &mdash; cashier receipts <span class="label-hint">(overrides all-footer for top-ups and withdrawals)</span></label>
+        <textarea id="s-receipt-footer-cashier" rows="2"></textarea></div>
+
+      <button type="submit" class="btn btn-primary" style="margin-top:8px">Save Settings</button>
+    </form>
+    <div id="settingsMsg" class="msg"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Staff Accounts</h2>
+    <table id="staffAccountsTable" class="data-table">
+      <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="panel-divider"></div>
+    <h3 class="sub-heading">Add Account</h3>
+    <form id="addAccountForm">
+      <div class="form-row"><label>Name</label><input type="text" id="acc-name" required></div>
+      <div class="form-row"><label>Username</label><input type="text" id="acc-username" required autocomplete="off"></div>
+      <div class="form-row"><label>Password</label><input type="password" id="acc-password" required autocomplete="new-password"></div>
+      <div class="form-row"><label>Role</label>
+        <select id="acc-role"><option value="pos-staff">POS Staff</option><option value="cashier">Cashier</option><option value="admin">Admin</option></select>
+      </div>
+      <button type="submit" class="btn btn-primary">Add Account</button>
+    </form>
+    <div id="accountMsg" class="msg"></div>
+  </div>
+
+</div>
+
+<!-- ===================== EDIT MEMBER MODAL ===================== -->
+<div id="editModal" class="modal-overlay hidden" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal">
+    <h3>Edit Member</h3>
+    <form id="editForm">
+      <div class="form-row"><label>Member Number</label><input type="text" id="edit-number" required></div>
+      <div class="form-row"><label>Full Name</label><input type="text" id="edit-name" required></div>
+      <div class="form-row">
+        <label>New PIN <span class="label-hint">(leave blank to keep current)</span></label>
+        <input type="password" id="edit-pin" placeholder="Leave blank to keep">
+      </div>
+      <div id="editOverdraftRow" class="form-row-check hidden">
+        <input type="checkbox" id="edit-overdraft">
+        <label for="edit-overdraft" id="editOverdraftLabel"></label>
+      </div>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <button type="button" class="btn" onclick="closeEditModal()">Cancel</button>
+      </div>
+    </form>
+    <div id="editMsg" class="msg"></div>
+  </div>
+</div>
+
+<!-- ===================== EDIT ACCOUNT MODAL ===================== -->
+<div id="editAccountModal" class="modal-overlay hidden" onclick="if(event.target===this)closeEditAccountModal()">
+  <div class="modal">
+    <h3>Edit Account</h3>
+    <form id="editAccountForm">
+      <div class="form-row"><label>Name</label><input type="text" id="eacc-name"></div>
+      <div class="form-row"><label>Username</label><input type="text" id="eacc-username" autocomplete="off"></div>
+      <div class="form-row">
+        <label>New Password <span class="label-hint">(leave blank to keep)</span></label>
+        <input type="password" id="eacc-password" placeholder="Leave blank to keep" autocomplete="new-password">
+      </div>
+      <div class="form-row"><label>Role</label>
+        <select id="eacc-role"><option value="pos-staff">POS Staff</option><option value="cashier">Cashier</option><option value="admin">Admin</option></select>
+      </div>
+      <div class="form-row form-row-check">
+        <input type="checkbox" id="eacc-active">
+        <label for="eacc-active">Active (can log in)</label>
+      </div>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">Save</button>
+        <button type="button" class="btn" onclick="closeEditAccountModal()">Cancel</button>
+      </div>
+    </form>
+    <div id="editAccountMsg" class="msg"></div>
+  </div>
+</div>
+
+<script src="/static/common.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

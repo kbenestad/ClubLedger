@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bar – ClubLedger</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+<nav>
+  <span class="brand" id="navBrand">ClubLedger</span>
+  <a class="nav-link" href="/cashier">Cashier</a>
+  <a class="nav-link active" href="/bar">Bar</a>
+</nav>
+
+<div class="view">
+
+  <div class="panel">
+    <h2>Charge Account</h2>
+    <div class="search-row">
+      <input type="text" id="barSearch" placeholder="Search member…">
+      <button class="btn" onclick="barSearchMembers()">Search</button>
+    </div>
+    <div id="barMemberList" class="member-pick-list"></div>
+
+    <div id="barForm" class="hidden">
+      <div class="selected-member-box" id="barSelected"></div>
+
+      <div class="form-row">
+        <label>Amount (<span class="currency-unit"></span>)</label>
+        <input type="number" id="barAmount" placeholder="e.g. 350" min="1" step="1">
+      </div>
+      <div class="form-row">
+        <label>PIN</label>
+        <input type="password" id="barPin" placeholder="Member PIN" maxlength="20">
+      </div>
+      <div class="form-row">
+        <label>Staff</label>
+        <select id="barStaff"></select>
+      </div>
+      <div class="form-row">
+        <label>Note (optional)</label>
+        <input type="text" id="barNote" placeholder="">
+      </div>
+      <button class="btn btn-danger" onclick="doCharge()">Charge</button>
+      <button class="btn" onclick="clearBarSelection()">Cancel</button>
+    </div>
+    <div id="barMsg" class="msg"></div>
+  </div>
+
+</div>
+
+<script src="/static/common.js"></script>
+<script src="/static/bar.js"></script>
+</body>
+</html>
