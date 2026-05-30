@@ -4,10 +4,8 @@ Admin configuration: edit the CONFIG dict below.
 """
 
 import sqlite3
-import hashlib
-import time
 import os
-from contextlib import contextmanager
+from contextlib import contextmanager, asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -122,16 +120,17 @@ def format_amount(pence: int) -> str:
 # FastAPI app
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title=CONFIG["club_name"])
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+app = FastAPI(title=CONFIG["club_name"], lifespan=lifespan)
 
 # Serve static files
 static_dir = Path(__file__).parent / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
-
-@app.on_event("startup")
-def on_startup():
-    init_db()
 
 # ---------------------------------------------------------------------------
 # Pydantic models
