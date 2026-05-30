@@ -219,3 +219,57 @@ nav {
 .msg:empty { display: none; }
 .msg.ok { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
 .msg.err { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+
+/* ---- Login overlay ---- */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background: #1a1a2e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 500;
+}
+.login-card {
+  background: #fff;
+  border-radius: 12px;
+  padding: 40px;
+  width: 380px;
+  max-width: calc(100vw - 32px);
+  box-shadow: 0 20px 60px rgba(0,0,0,.4);
+}
+.login-card h1 { font-size: 1.6rem; margin-bottom: 4px; text-align: center; }
+.login-sub { text-align: center; color: var(--muted); font-size: .9rem; margin-bottom: 24px; }
+
+/* ---- Nav right (user + logout) ---- */
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.nav-user { color: #aaa; font-size: .88rem; }
+.nav-logout {
+  background: transparent;
+  border: 1px solid #555;
+  color: #ccc;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: .85rem;
+  transition: background .15s;
+}
+.nav-logout:hover { background: rgba(255,255,255,.1); }
+
+/* ---- Admin form extras ---- */
+.label-hint { font-weight: 400; color: #aaa; font-size: .8rem; }
+.form-row textarea {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 1rem;
+  outline: none;
+  resize: vertical;
+  font-family: inherit;
+  transition: border-color .15s;
+}
+.form-row textarea:focus { border-color: var(--primary); }
+.form-row-check { flex-direction: row !important; align-items: center; gap: 8px; }
+.form-row-check label { font-weight: 400; color: var(--text); font-size: 1rem; }
+.panel-divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+.sub-heading { font-size: 1rem; margin-bottom: 14px; color: var(--text); }
