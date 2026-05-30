@@ -71,10 +71,11 @@ def init_db():
     with db_conn() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS members (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
                 member_number TEXT UNIQUE NOT NULL,
                 name          TEXT NOT NULL,
                 pin_hash      TEXT NOT NULL,
+                overdraft_override INTEGER DEFAULT NULL,
                 created_at    TEXT NOT NULL DEFAULT (datetime('now'))
             );
             CREATE TABLE IF NOT EXISTS ledger_entries (
@@ -117,6 +118,11 @@ def init_db():
 def migrate_db():
     """Run schema migrations that can't be expressed as CREATE TABLE IF NOT EXISTS."""
     with db_conn() as conn:
+        # --- members: add overdraft_override column ---
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(members)").fetchall()]
+        if "overdraft_override" not in cols:
+            conn.execute("ALTER TABLE members ADD COLUMN overdraft_override INTEGER DEFAULT NULL")
+
         # --- staff_accounts: add cashier/pos-staff roles ---
         schema = conn.execute(
             "SELECT sql FROM sqlite_master WHERE type='table' AND name='staff_accounts'"
@@ -299,9 +305,10 @@ class MemberCreate(BaseModel):
         return v
 
 class MemberUpdate(BaseModel):
-    member_number: Optional[str] = None
-    name:          Optional[str] = None
-    pin:           Optional[str] = None
+    member_number:     Optional[str] = None
+    name:              Optional[str] = None
+    pin:               Optional[str] = None
+    overdraft_override: Optional[int] = None  # NULL=default, 1=allow, 0=block
 
 class TopupRequest(BaseModel):
     member_id: int
@@ -309,11 +316,10 @@ class TopupRequest(BaseModel):
     note:      Optional[str] = None
 
 class ChargeRequest(BaseModel):
-    member_id:         int
-    amount:            int
-    pin:               str
-    note:              Optional[str]  = None
-    overdraft_override: bool          = False
+    member_id: int
+    amount:    int
+    pin:       str
+    note:      Optional[str] = None
 
 class WithdrawalRequest(BaseModel):
     member_id: int
@@ -450,6 +456,8 @@ def update_member(member_id: int, body: MemberUpdate, user: dict = Depends(curre
         if body.pin is not None:
             if len(body.pin) < 4: raise HTTPException(400, "PIN must be at least 4 characters")
             updates["pin_hash"] = hash_pin(body.pin)
+        if "overdraft_override" in body.model_fields_set:
+            updates["overdraft_override"] = body.overdraft_override  # None, 0, or 1
         if updates:
             conn.execute(
                 f"UPDATE members SET {', '.join(f'{k}=?' for k in updates)} WHERE id=?",
@@ -486,6 +494,7 @@ def list_members(q: Optional[str] = None, user: dict = Depends(current_user)):
             bal = member_balance(conn, r["id"])
             result.append({
                 "id": r["id"], "member_number": r["member_number"], "name": r["name"],
+                "overdraft_override": r["overdraft_override"],
                 "balance": bal, "balance_display": format_amount(bal), "created_at": r["created_at"],
             })
         return result
@@ -523,15 +532,16 @@ def charge(body: ChargeRequest, user: dict = Depends(pos_user)):
             raise HTTPException(403, "Incorrect PIN")
         bal = member_balance(conn, body.member_id)
         policy = s.get("overdraft_policy", "never")
-        if policy == "always":
+        member_ov = member["overdraft_override"]  # None, 0, or 1
+        if policy == "never":
+            overdraft_ok = False
+        elif policy == "always":
             overdraft_ok = True
-        elif policy == "staff_override":
-            overdraft_ok = body.overdraft_override
-        elif policy == "admin_override":
-            overdraft_ok = body.overdraft_override and user["role"] == "admin"
+        elif policy in ("staff_override", "admin_override"):
+            overdraft_ok = (member_ov == 1)
         elif policy == "staff_block":
-            overdraft_ok = not body.overdraft_override
-        else:  # "never" or unknown
+            overdraft_ok = (member_ov != 0)  # None or 1 = allowed; 0 = explicitly blocked
+        else:
             overdraft_ok = False
         if not overdraft_ok and bal < body.amount:
             raise HTTPException(400, f"Insufficient balance ({format_amount(bal)})")

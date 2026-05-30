@@ -153,10 +153,6 @@
         <label>Note (optional)</label>
         <input type="text" id="barNote" placeholder="">
       </div>
-      <div id="barOverrideRow" class="form-row-check hidden">
-        <input type="checkbox" id="barOverrideCheck">
-        <label for="barOverrideCheck" id="barOverrideLabel"></label>
-      </div>
       <button class="btn btn-danger" onclick="doCharge()">Charge</button>
       <button class="btn" onclick="clearBarSelection()">Cancel</button>
     </div>
@@ -235,6 +231,10 @@
       <div class="form-row">
         <label>New PIN <span class="label-hint">(leave blank to keep current)</span></label>
         <input type="password" id="edit-pin" placeholder="Leave blank to keep">
+      </div>
+      <div id="editOverdraftRow" class="form-row-check hidden">
+        <input type="checkbox" id="edit-overdraft">
+        <label for="edit-overdraft" id="editOverdraftLabel"></label>
       </div>
       <div class="modal-actions">
         <button type="submit" class="btn btn-primary">Save</button>

@@ -160,7 +160,7 @@ function renderMemberTable(members) {
       <td>${m.created_at ? m.created_at.slice(0, 10) : ''}</td>
       <td class="row-actions">
         <a href="/members/${m.id}/statement" target="_blank" class="btn row-btn">Statement</a>
-        <button class="btn row-btn" onclick="openEditModal(${m.id},'${esc(m.name)}','${esc(m.member_number)}')">Edit</button>
+        <button class="btn row-btn" onclick="openEditModal(${m.id},'${esc(m.name)}','${esc(m.member_number)}',${JSON.stringify(m.overdraft_override)})">Edit</button>
         ${m.balance === 0
           ? `<button class="btn btn-danger row-btn" onclick="deleteMember(${m.id},'${esc(m.name)}')">Delete</button>`
           : ''}
@@ -169,12 +169,30 @@ function renderMemberTable(members) {
 }
 
 // Edit member modal
-function openEditModal(id, name, number) {
+function openEditModal(id, name, number, overdraftOverride) {
   editMemberId = id;
   document.getElementById('edit-number').value = number;
   document.getElementById('edit-name').value   = name;
   document.getElementById('edit-pin').value    = '';
   setMsg('editMsg', '', '');
+
+  const policy = cfg.overdraft_policy || 'never';
+  const overrideRow   = document.getElementById('editOverdraftRow');
+  const overrideCheck = document.getElementById('edit-overdraft');
+  const overrideLabel = document.getElementById('editOverdraftLabel');
+
+  if (policy === 'staff_override' || (policy === 'admin_override' && currentUser.role === 'admin')) {
+    overrideLabel.textContent = 'Allow overdraft for this member';
+    overrideCheck.checked = (overdraftOverride === 1);
+    overrideRow.classList.remove('hidden');
+  } else if (policy === 'staff_block') {
+    overrideLabel.textContent = 'Block overdraft for this member';
+    overrideCheck.checked = (overdraftOverride === 0);
+    overrideRow.classList.remove('hidden');
+  } else {
+    overrideRow.classList.add('hidden');
+  }
+
   document.getElementById('editModal').classList.remove('hidden');
   document.getElementById('edit-name').focus();
 }
@@ -192,6 +210,17 @@ async function saveEdit() {
   };
   const pin = document.getElementById('edit-pin').value;
   if (pin) body.pin = pin;
+
+  const policy = cfg.overdraft_policy || 'never';
+  const overrideRow = document.getElementById('editOverdraftRow');
+  if (!overrideRow.classList.contains('hidden')) {
+    const checked = document.getElementById('edit-overdraft').checked;
+    if (policy === 'staff_block') {
+      body.overdraft_override = checked ? 0 : null;
+    } else {
+      body.overdraft_override = checked ? 1 : null;
+    }
+  }
   try {
     await apiFetch(`/members/${editMemberId}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' },
@@ -308,35 +337,14 @@ function selectBarMember(id, name, number, balance, balanceDisplay) {
     `<strong>${esc(name)}</strong> &nbsp; #${esc(number)} &nbsp; Balance: <span class="${balanceClass(balance)}">${esc(balanceDisplay)}</span>`;
   document.getElementById('barForm').classList.remove('hidden');
   setMsg('barMsg', '', '');
-
-  const policy = cfg.overdraft_policy || 'never';
-  const overrideRow   = document.getElementById('barOverrideRow');
-  const overrideCheck = document.getElementById('barOverrideCheck');
-  const overrideLabel = document.getElementById('barOverrideLabel');
-  overrideCheck.checked = false;
-
-  if (policy === 'staff_override') {
-    overrideLabel.textContent = 'Allow overdraft for this transaction';
-    overrideRow.classList.remove('hidden');
-  } else if (policy === 'admin_override' && currentUser.role === 'admin') {
-    overrideLabel.textContent = 'Allow overdraft for this transaction';
-    overrideRow.classList.remove('hidden');
-  } else if (policy === 'staff_block') {
-    overrideLabel.textContent = 'Block if insufficient balance';
-    overrideRow.classList.remove('hidden');
-  } else {
-    overrideRow.classList.add('hidden');
-  }
 }
 
 function clearBarSelection() {
   barMember = null;
   document.getElementById('barForm').classList.add('hidden');
-  document.getElementById('barAmount').value      = '';
-  document.getElementById('barPin').value         = '';
-  document.getElementById('barNote').value        = '';
-  document.getElementById('barOverrideCheck').checked = false;
-  document.getElementById('barOverrideRow').classList.add('hidden');
+  document.getElementById('barAmount').value = '';
+  document.getElementById('barPin').value   = '';
+  document.getElementById('barNote').value  = '';
   setMsg('barMsg', '', '');
 }
 
@@ -347,11 +355,10 @@ async function doCharge() {
   const note   = document.getElementById('barNote').value.trim();
   if (!amount) { setMsg('barMsg', 'Enter a valid amount.', 'err'); return; }
   if (!pin)    { setMsg('barMsg', 'PIN required.', 'err'); return; }
-  const overdraft_override = document.getElementById('barOverrideCheck').checked;
   try {
     const r = await apiFetch('/charge', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: barMember.id, amount, pin, note: note || null, overdraft_override })
+      body: JSON.stringify({ member_id: barMember.id, amount, pin, note: note || null })
     });
     window.open(`/receipt/${r.entry_id}`, '_blank');
     setMsg('barMsg', `Charge complete. New balance: ${r.new_balance_display}`, 'ok');
