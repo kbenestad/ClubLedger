@@ -166,17 +166,30 @@
         <input type="number" id="barAmount" placeholder="e.g. 3.50" min="0.01" step="0.01">
       </div>
       <div class="form-row">
-        <label>Member PIN</label>
-        <input type="password" id="barPin" placeholder="Member PIN" maxlength="20">
-      </div>
-      <div class="form-row">
         <label>Note (optional)</label>
         <input type="text" id="barNote" placeholder="">
       </div>
-      <button class="btn btn-danger" onclick="doCharge()">Charge</button>
+      <button class="btn btn-primary" onclick="prepareCharge()">Charge</button>
       <button class="btn" onclick="clearBarSelection()">Cancel</button>
     </div>
     <div id="barMsg" class="msg"></div>
+  </div>
+</div>
+
+<!-- PIN confirmation overlay (patron-facing) -->
+<div id="pinOverlay" class="pin-overlay hidden">
+  <div class="pin-card">
+    <div class="pin-charge-amount" id="pinAmount"></div>
+    <div class="pin-member-name" id="pinMember"></div>
+    <div class="pin-instruction">Please enter your PIN</div>
+    <input type="password" id="barPin" class="pin-input" placeholder="••••"
+           maxlength="20" autocomplete="off" inputmode="numeric"
+           onkeydown="if(event.key==='Enter') confirmCharge()">
+    <div id="pinMsg" class="msg"></div>
+    <div class="pin-actions">
+      <button class="btn pin-cancel-btn" onclick="cancelPin()">Cancel</button>
+      <button class="btn btn-primary pin-ok-btn" onclick="confirmCharge()">OK</button>
+    </div>
   </div>
 </div>
 

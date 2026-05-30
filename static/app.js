@@ -370,18 +370,44 @@ function clearBarSelection() {
   barMember = null;
   document.getElementById('barForm').classList.add('hidden');
   document.getElementById('barAmount').value = '';
-  document.getElementById('barPin').value   = '';
-  document.getElementById('barNote').value  = '';
+  document.getElementById('barNote').value   = '';
+  hidePinOverlay();
   setMsg('barMsg', '', '');
 }
 
-async function doCharge() {
+function hidePinOverlay() {
+  document.getElementById('pinOverlay').classList.add('hidden');
+  document.getElementById('barPin').value = '';
+  setMsg('pinMsg', '', '');
+}
+
+function cancelPin() {
+  hidePinOverlay();
+  // return focus to amount so staff can adjust
+  document.getElementById('barAmount').focus();
+}
+
+function prepareCharge() {
+  if (!barMember) return;
+  const amount = toMinor('barAmount');
+  if (!amount) { setMsg('barMsg', 'Enter a valid amount.', 'err'); return; }
+  setMsg('barMsg', '', '');
+  // populate overlay
+  document.getElementById('pinAmount').textContent =
+    'Charge: ' + fmtAmount(amount);
+  document.getElementById('pinMember').textContent = barMember.name;
+  document.getElementById('barPin').value = '';
+  setMsg('pinMsg', '', '');
+  document.getElementById('pinOverlay').classList.remove('hidden');
+  document.getElementById('barPin').focus();
+}
+
+async function confirmCharge() {
   if (!barMember) return;
   const amount = toMinor('barAmount');
   const pin    = document.getElementById('barPin').value;
   const note   = document.getElementById('barNote').value.trim();
-  if (!amount) { setMsg('barMsg', 'Enter a valid amount.', 'err'); return; }
-  if (!pin)    { setMsg('barMsg', 'PIN required.', 'err'); return; }
+  if (!pin) { setMsg('pinMsg', 'PIN required.', 'err'); return; }
   try {
     const r = await apiFetch('/charge', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -390,7 +416,7 @@ async function doCharge() {
     window.open(`/receipt/${r.entry_id}`, '_blank');
     setMsg('barMsg', `Charge complete. New balance: ${r.new_balance_display}`, 'ok');
     clearBarSelection();
-  } catch (err) { setMsg('barMsg', err.message, 'err'); }
+  } catch (err) { setMsg('pinMsg', err.message, 'err'); }
 }
 
 // ---------------------------------------------------------------------------
