@@ -153,6 +153,10 @@
         <label>Note (optional)</label>
         <input type="text" id="barNote" placeholder="">
       </div>
+      <div id="barOverrideRow" class="form-row-check hidden">
+        <input type="checkbox" id="barOverrideCheck">
+        <label for="barOverrideCheck" id="barOverrideLabel"></label>
+      </div>
       <button class="btn btn-danger" onclick="doCharge()">Charge</button>
       <button class="btn" onclick="clearBarSelection()">Cancel</button>
     </div>
@@ -184,9 +188,15 @@
         <input type="number" id="s-max-charge" step="0.01"></div>
       <div class="form-row"><label>Receipt footer text <span class="label-hint">(optional)</span></label>
         <textarea id="s-receipt-footer" rows="2" placeholder="Printed at the bottom of every receipt and statement"></textarea></div>
-      <div class="form-row form-row-check">
-        <input type="checkbox" id="s-allow-negative">
-        <label for="s-allow-negative">Allow negative balance (overdraft at bar)</label>
+      <div class="form-row">
+        <label>Overdraft (bar charges)</label>
+        <select id="s-overdraft-policy">
+          <option value="never">Not allowed</option>
+          <option value="always">Allowed for all</option>
+          <option value="staff_override">Default not allowed — staff may override per charge</option>
+          <option value="admin_override">Default not allowed — admin may override per charge</option>
+          <option value="staff_block">Default allowed — staff may block per charge</option>
+        </select>
       </div>
       <button type="submit" class="btn btn-primary">Save Settings</button>
     </form>

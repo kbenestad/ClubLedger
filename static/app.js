@@ -308,14 +308,35 @@ function selectBarMember(id, name, number, balance, balanceDisplay) {
     `<strong>${esc(name)}</strong> &nbsp; #${esc(number)} &nbsp; Balance: <span class="${balanceClass(balance)}">${esc(balanceDisplay)}</span>`;
   document.getElementById('barForm').classList.remove('hidden');
   setMsg('barMsg', '', '');
+
+  const policy = cfg.overdraft_policy || 'never';
+  const overrideRow   = document.getElementById('barOverrideRow');
+  const overrideCheck = document.getElementById('barOverrideCheck');
+  const overrideLabel = document.getElementById('barOverrideLabel');
+  overrideCheck.checked = false;
+
+  if (policy === 'staff_override') {
+    overrideLabel.textContent = 'Allow overdraft for this transaction';
+    overrideRow.classList.remove('hidden');
+  } else if (policy === 'admin_override' && currentUser.role === 'admin') {
+    overrideLabel.textContent = 'Allow overdraft for this transaction';
+    overrideRow.classList.remove('hidden');
+  } else if (policy === 'staff_block') {
+    overrideLabel.textContent = 'Block if insufficient balance';
+    overrideRow.classList.remove('hidden');
+  } else {
+    overrideRow.classList.add('hidden');
+  }
 }
 
 function clearBarSelection() {
   barMember = null;
   document.getElementById('barForm').classList.add('hidden');
-  document.getElementById('barAmount').value = '';
-  document.getElementById('barPin').value    = '';
-  document.getElementById('barNote').value   = '';
+  document.getElementById('barAmount').value      = '';
+  document.getElementById('barPin').value         = '';
+  document.getElementById('barNote').value        = '';
+  document.getElementById('barOverrideCheck').checked = false;
+  document.getElementById('barOverrideRow').classList.add('hidden');
   setMsg('barMsg', '', '');
 }
 
@@ -326,10 +347,11 @@ async function doCharge() {
   const note   = document.getElementById('barNote').value.trim();
   if (!amount) { setMsg('barMsg', 'Enter a valid amount.', 'err'); return; }
   if (!pin)    { setMsg('barMsg', 'PIN required.', 'err'); return; }
+  const overdraft_override = document.getElementById('barOverrideCheck').checked;
   try {
     const r = await apiFetch('/charge', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ member_id: barMember.id, amount, pin, note: note || null })
+      body: JSON.stringify({ member_id: barMember.id, amount, pin, note: note || null, overdraft_override })
     });
     window.open(`/receipt/${r.entry_id}`, '_blank');
     setMsg('barMsg', `Charge complete. New balance: ${r.new_balance_display}`, 'ok');
@@ -356,8 +378,8 @@ async function loadAdminSettings() {
     document.getElementById('s-min-topup').value        = ((s.min_topup  || 0) / div).toFixed(2);
     document.getElementById('s-max-topup').value        = ((s.max_topup  || 0) / div).toFixed(2);
     document.getElementById('s-max-charge').value       = ((s.max_charge || 0) / div).toFixed(2);
-    document.getElementById('s-receipt-footer').value   = s.receipt_footer   || '';
-    document.getElementById('s-allow-negative').checked = !!s.allow_negative_balance;
+    document.getElementById('s-receipt-footer').value    = s.receipt_footer   || '';
+    document.getElementById('s-overdraft-policy').value  = s.overdraft_policy || 'never';
     const sym = s.currency_symbol || '';
     document.getElementById('s-min-hint').textContent   = `in ${s.currency_major || 'major units'}`;
     document.getElementById('s-max-hint').textContent   = `in ${s.currency_major || 'major units'}`;
@@ -376,8 +398,8 @@ async function saveSettings() {
     min_topup:              Math.round(parseFloat(document.getElementById('s-min-topup').value)  * div),
     max_topup:              Math.round(parseFloat(document.getElementById('s-max-topup').value)  * div),
     max_charge:             Math.round(parseFloat(document.getElementById('s-max-charge').value) * div),
-    receipt_footer:         document.getElementById('s-receipt-footer').value,
-    allow_negative_balance: document.getElementById('s-allow-negative').checked,
+    receipt_footer:   document.getElementById('s-receipt-footer').value,
+    overdraft_policy: document.getElementById('s-overdraft-policy').value,
   };
   try {
     await apiFetch('/admin/settings', {

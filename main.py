@@ -27,7 +27,7 @@ CONFIG = {
     "currency_major":         "pounds",   # label for major unit (what users enter)
     "currency_minor":         "pence",    # label for stored minor unit
     "currency_divisor":       100,        # minor units per major unit
-    "allow_negative_balance": False,
+    "overdraft_policy":       "never",  # never|always|staff_override|admin_override|staff_block
     "min_topup":              100,        # minor units
     "max_topup":              100_000,
     "max_charge":             50_000,
@@ -166,6 +166,18 @@ def migrate_db():
             conn.execute("DROP TABLE _ledger_entries_old")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_ledger_member ON ledger_entries(member_id)")
 
+        # --- app_settings: rename allow_negative_balance → overdraft_policy ---
+        row = conn.execute(
+            "SELECT value FROM app_settings WHERE key='allow_negative_balance'"
+        ).fetchone()
+        if row is not None:
+            old_val = json.loads(row[0])
+            conn.execute(
+                "INSERT OR IGNORE INTO app_settings (key,value) VALUES (?,?)",
+                ("overdraft_policy", json.dumps("always" if old_val else "never"))
+            )
+            conn.execute("DELETE FROM app_settings WHERE key='allow_negative_balance'")
+
 def seed_admin():
     with db_conn() as conn:
         if conn.execute("SELECT COUNT(*) FROM staff_accounts WHERE role='admin'").fetchone()[0] == 0:
@@ -297,10 +309,11 @@ class TopupRequest(BaseModel):
     note:      Optional[str] = None
 
 class ChargeRequest(BaseModel):
-    member_id: int
-    amount:    int
-    pin:       str
-    note:      Optional[str] = None
+    member_id:         int
+    amount:            int
+    pin:               str
+    note:              Optional[str]  = None
+    overdraft_override: bool          = False
 
 class WithdrawalRequest(BaseModel):
     member_id: int
@@ -341,7 +354,7 @@ class AppSettingsUpdate(BaseModel):
     currency_major:         Optional[str]  = None
     currency_minor:         Optional[str]  = None
     currency_divisor:       Optional[int]  = None
-    allow_negative_balance: Optional[bool] = None
+    overdraft_policy:       Optional[str]  = None
     min_topup:              Optional[int]  = None
     max_topup:              Optional[int]  = None
     max_charge:             Optional[int]  = None
@@ -509,7 +522,18 @@ def charge(body: ChargeRequest, user: dict = Depends(pos_user)):
         if not verify_pin(body.pin, member["pin_hash"]):
             raise HTTPException(403, "Incorrect PIN")
         bal = member_balance(conn, body.member_id)
-        if not s["allow_negative_balance"] and bal < body.amount:
+        policy = s.get("overdraft_policy", "never")
+        if policy == "always":
+            overdraft_ok = True
+        elif policy == "staff_override":
+            overdraft_ok = body.overdraft_override
+        elif policy == "admin_override":
+            overdraft_ok = body.overdraft_override and user["role"] == "admin"
+        elif policy == "staff_block":
+            overdraft_ok = not body.overdraft_override
+        else:  # "never" or unknown
+            overdraft_ok = False
+        if not overdraft_ok and bal < body.amount:
             raise HTTPException(400, f"Insufficient balance ({format_amount(bal)})")
         cur = conn.execute(
             "INSERT INTO ledger_entries (member_id,amount,type,venue,note,staff_name) VALUES (?,?,?,?,?,?)",
@@ -824,8 +848,12 @@ def delete_staff_account(account_id: int, user: dict = Depends(admin_user)):
 def get_admin_settings(user: dict = Depends(admin_user)):
     return _settings
 
+_OVERDRAFT_POLICIES = ("never", "always", "staff_override", "admin_override", "staff_block")
+
 @app.post("/admin/settings")
 def update_admin_settings(body: AppSettingsUpdate, user: dict = Depends(admin_user)):
+    if body.overdraft_policy is not None and body.overdraft_policy not in _OVERDRAFT_POLICIES:
+        raise HTTPException(400, "Invalid overdraft policy")
     with db_conn() as conn:
         for field in body.model_fields_set:
             val = getattr(body, field)
