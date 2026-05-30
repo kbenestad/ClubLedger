@@ -88,6 +88,8 @@ CONFIG = {
     "receipt_footer_cashier": "",
     # Timezone for display (IANA name); defaults to server local timezone
     "timezone":               _server_timezone(),
+    # Default paper size for receipts and statements
+    "paper_size":             "A4",
 }
 
 DB_PATH  = "clubledger.db"
@@ -499,6 +501,8 @@ class AppSettingsUpdate(BaseModel):
     receipt_footer_cashier: Optional[str]  = None
     # Timezone
     timezone:               Optional[str]  = None
+    # Default paper size
+    paper_size:             Optional[str]  = None
 
 # ---------------------------------------------------------------------------
 # Page routes
@@ -737,20 +741,24 @@ def transactions(member_id: int, limit: int = 50, offset: int = 0,
 # Print views (no auth – opened as new-tab popups)
 # ---------------------------------------------------------------------------
 
-def _print_size_script():
-    return """<script>
-function setSize(s){
+def _print_size_script(s: dict):
+    size = "A5" if (s.get("paper_size") or "A4").upper() == "A5" else "A4"
+    return f"""<script>
+function setSize(s){{
   var el=document.getElementById('psStyle');
-  if(!el){el=document.createElement('style');el.id='psStyle';document.head.appendChild(el);}
-  el.textContent='@media print{@page{size:'+s+';margin:'+(s==='A5'?'10mm':'16mm')+';}}';}
-setSize('A4');
+  if(!el){{el=document.createElement('style');el.id='psStyle';document.head.appendChild(el);}}
+  el.textContent='@media print{{@page{{size:'+s+';margin:'+(s==='A5'?'10mm':'16mm')+';}}}}';}}
+setSize('{size}');
 </script>"""
 
-def _print_controls():
-    return """<div class="no-print controls">
+def _print_controls(s: dict):
+    size = "A5" if (s.get("paper_size") or "A4").upper() == "A5" else "A4"
+    a4_chk = ' checked' if size == "A4" else ''
+    a5_chk = ' checked' if size == "A5" else ''
+    return f"""<div class="no-print controls">
   <span class="size-label">Paper:</span>
-  <label><input type="radio" name="ps" value="A4" checked onchange="setSize('A4')"> A4</label>
-  <label><input type="radio" name="ps" value="A5" onchange="setSize('A5')"> A5</label>
+  <label><input type="radio" name="ps" value="A4"{a4_chk} onchange="setSize('A4')"> A4</label>
+  <label><input type="radio" name="ps" value="A5"{a5_chk} onchange="setSize('A5')"> A5</label>
   <button class="print-btn" onclick="window.print()">Print</button>
 </div>"""
 
@@ -905,7 +913,7 @@ def statement(member_id: int):
 
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>Statement &mdash; {member['name']}</title><style>{RECEIPT_CSS}</style></head><body>
-{_print_controls()}
+{_print_controls(s)}
 {_biz_header_html(s)}
 <hr>
 <h2>Account Statement</h2>
@@ -919,7 +927,7 @@ def statement(member_id: int):
 </tr></thead><tbody>{rows_html}</tbody></table>
 <div class="balance-box">Current Balance: {fmt(bal)}</div>
 {('<div class="footer">' + footer + '</div>') if footer else ''}
-{_print_size_script()}</body></html>"""
+{_print_size_script(s)}</body></html>"""
 
 @app.get("/receipt/{entry_id}", response_class=HTMLResponse)
 def receipt(entry_id: int):
@@ -1008,14 +1016,14 @@ def receipt(entry_id: int):
 
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>Receipt &mdash; {member['name']}</title><style>{RECEIPT_CSS}</style></head><body>
-{_print_controls()}
+{_print_controls(s)}
 {_biz_header_html(s)}
 <hr>
 <div class="rx-title">{title}</div>
 {body_html}
 <hr>
 {('<div class="footer">' + footer + '</div>') if footer else ''}
-{_print_size_script()}</body></html>"""
+{_print_size_script(s)}</body></html>"""
 
 # ---------------------------------------------------------------------------
 # Products
