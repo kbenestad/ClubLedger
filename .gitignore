@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ClubLedger runtime data
+clubledger.db
+clubledger.db-wal
+clubledger.db-shm
+staff.json
