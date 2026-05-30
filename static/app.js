@@ -67,7 +67,7 @@ function populateTransferTypes() {
     const sel = document.getElementById(id);
     if (!sel) return;
     const prev = sel.value;
-    sel.innerHTML = '<option value="">— select —</option>' +
+    sel.innerHTML = '<option value="">&mdash; select &mdash;</option>' +
       types.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
     if (prev && types.includes(prev)) sel.value = prev;
   });

@@ -54,7 +54,7 @@ async function loadStaffInto(selectId) {
   try {
     const data = await apiFetch('/staff');
     const saved = sessionStorage.getItem('lastStaff') || '';
-    sel.innerHTML = '<option value="">— select staff —</option>' +
+    sel.innerHTML = '<option value="">&mdash; select staff &mdash;</option>' +
       data.staff.map(n => `<option value="${esc(n)}"${n === saved ? ' selected' : ''}>${esc(n)}</option>`).join('');
     sel.addEventListener('change', () => {
       if (sel.value) sessionStorage.setItem('lastStaff', sel.value);
@@ -67,7 +67,7 @@ async function refreshAllStaffDropdowns() {
     const data = await apiFetch('/staff');
     const saved = sessionStorage.getItem('lastStaff') || '';
     document.querySelectorAll('select[id$="Staff"]').forEach(sel => {
-      sel.innerHTML = '<option value="">— select staff —</option>' +
+      sel.innerHTML = '<option value="">&mdash; select staff &mdash;</option>' +
         data.staff.map(n => `<option value="${esc(n)}"${n === saved ? ' selected' : ''}>${esc(n)}</option>`).join('');
     });
     renderStaffChips(data.staff);
