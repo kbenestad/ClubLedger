@@ -4,14 +4,15 @@ Admin configuration: edit the CONFIG dict below.
 """
 
 import sqlite3
+import json
 import os
 from contextlib import contextmanager, asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
 import bcrypt
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
 from typing import Optional
@@ -32,6 +33,8 @@ CONFIG = {
 }
 
 DB_PATH = CONFIG["db_path"]
+static_dir = Path(__file__).parent / "static"
+STAFF_FILE = Path(__file__).parent / "staff.json"
 
 # ---------------------------------------------------------------------------
 # Database
@@ -116,19 +119,25 @@ def format_amount(pence: int) -> str:
     div = CONFIG["currency_divisor"]
     return f"{sym}{pence / div:.2f}"
 
+def load_staff() -> list:
+    if STAFF_FILE.exists():
+        return json.loads(STAFF_FILE.read_text()).get("staff", [])
+    return []
+
+def save_staff(names: list):
+    STAFF_FILE.write_text(json.dumps({"staff": sorted(set(names))}, indent=2))
+
 # ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app):
     init_db()
     yield
 
 app = FastAPI(title=CONFIG["club_name"], lifespan=lifespan)
 
-# Serve static files
-static_dir = Path(__file__).parent / "static"
 static_dir.mkdir(exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
@@ -158,13 +167,13 @@ class MemberCreate(BaseModel):
 
 class TopupRequest(BaseModel):
     member_id: int
-    amount: int          # pence
+    amount: int
     staff_name: str
     note: Optional[str] = None
 
 class ChargeRequest(BaseModel):
     member_id: int
-    amount: int          # pence
+    amount: int
     pin: str
     staff_name: str
     note: Optional[str] = None
@@ -176,13 +185,28 @@ class ProductCreate(BaseModel):
     member_price: Optional[int] = None
     search_tags: Optional[str] = None
 
+class StaffAdd(BaseModel):
+    name: str
+
 # ---------------------------------------------------------------------------
-# Endpoints
+# Page routes
 # ---------------------------------------------------------------------------
 
-@app.get("/", response_class=HTMLResponse)
+@app.get("/", response_class=RedirectResponse)
 async def root():
-    return (static_dir / "index.html").read_text()
+    return RedirectResponse(url="/cashier", status_code=302)
+
+@app.get("/cashier", response_class=HTMLResponse)
+async def cashier_page():
+    return (static_dir / "cashier.html").read_text()
+
+@app.get("/bar", response_class=HTMLResponse)
+async def bar_page():
+    return (static_dir / "bar.html").read_text()
+
+# ---------------------------------------------------------------------------
+# API endpoints – members
+# ---------------------------------------------------------------------------
 
 @app.post("/members")
 def create_member(body: MemberCreate):
@@ -242,13 +266,15 @@ def topup(body: TopupRequest):
         member = conn.execute("SELECT * FROM members WHERE id=?", (body.member_id,)).fetchone()
         if not member:
             raise HTTPException(404, "Member not found")
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO ledger_entries (member_id, amount, type, venue, note, staff_name) VALUES (?,?,?,?,?,?)",
             (body.member_id, body.amount, "topup", "cashier", body.note, body.staff_name)
         )
+        entry_id = cur.lastrowid
         balance = member_balance(conn, body.member_id)
         return {
             "ok": True,
+            "entry_id": entry_id,
             "new_balance": balance,
             "new_balance_display": format_amount(balance),
         }
@@ -268,13 +294,15 @@ def charge(body: ChargeRequest):
         balance = member_balance(conn, body.member_id)
         if not CONFIG["allow_negative_balance"] and balance < body.amount:
             raise HTTPException(400, f"Insufficient balance ({format_amount(balance)})")
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO ledger_entries (member_id, amount, type, venue, note, staff_name) VALUES (?,?,?,?,?,?)",
             (body.member_id, body.amount, "charge", "bar", body.note, body.staff_name)
         )
+        entry_id = cur.lastrowid
         new_balance = member_balance(conn, body.member_id)
         return {
             "ok": True,
+            "entry_id": entry_id,
             "new_balance": new_balance,
             "new_balance_display": format_amount(new_balance),
         }
@@ -314,6 +342,39 @@ def transactions(member_id: int, limit: int = 50, offset: int = 0):
                 for r in rows
             ],
         }
+
+# ---------------------------------------------------------------------------
+# Print views
+# ---------------------------------------------------------------------------
+
+def _print_size_script() -> str:
+    return """
+<script>
+function setSize(s) {
+  var el = document.getElementById('psStyle');
+  if (!el) { el = document.createElement('style'); el.id = 'psStyle'; document.head.appendChild(el); }
+  el.textContent = '@media print { @page { size: ' + s + '; margin: ' + (s === 'A5' ? '8mm' : '14mm') + '; } }';
+}
+setSize('A4');
+</script>"""
+
+def _print_controls(extra_class: str = "") -> str:
+    return f"""<div class="no-print controls {extra_class}">
+  <span class="size-label">Paper size:</span>
+  <label><input type="radio" name="ps" value="A4" checked onchange="setSize('A4')"> A4</label>
+  <label><input type="radio" name="ps" value="A5" onchange="setSize('A5')"> A5</label>
+</div>"""
+
+PRINT_CSS = """
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #111; margin: 24px; }
+  h1 { font-size: 18px; margin-bottom: 2px; }
+  h2 { font-size: 13px; font-weight: normal; color: #555; margin-top: 0; margin-bottom: 16px; }
+  .controls { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .size-label { font-size: 12px; color: #555; }
+  .controls label { font-size: 12px; cursor: pointer; }
+  .print-btn { padding: 7px 18px; font-size: 13px; cursor: pointer; margin-left: auto; }
+  @media print { .no-print { display: none; } }
+"""
 
 @app.get("/members/{member_id}/statement", response_class=HTMLResponse)
 def statement(member_id: int):
@@ -361,14 +422,7 @@ def statement(member_id: int):
 <meta charset="UTF-8">
 <title>Statement – {member['name']}</title>
 <style>
-  @media print {{
-    @page {{ size: A4; margin: 15mm; }}
-    @page :first {{ size: A5; margin: 10mm; }}
-    .no-print {{ display: none; }}
-  }}
-  body {{ font-family: Arial, sans-serif; font-size: 11px; color: #111; margin: 20px; }}
-  h1 {{ font-size: 18px; margin-bottom: 2px; }}
-  h2 {{ font-size: 13px; font-weight: normal; color: #555; margin-top: 0; }}
+  {PRINT_CSS}
   table {{ width: 100%; border-collapse: collapse; margin-top: 16px; }}
   th {{ background: #222; color: #fff; padding: 5px 8px; text-align: left; }}
   td {{ padding: 4px 8px; border-bottom: 1px solid #e0e0e0; }}
@@ -378,11 +432,11 @@ def statement(member_id: int):
   .cap {{ text-transform: capitalize; }}
   .balance-box {{ margin-top: 12px; text-align: right; font-size: 14px; }}
   .balance-box span {{ font-weight: bold; font-size: 18px; }}
-  .print-btn {{ margin-top: 12px; padding: 8px 18px; font-size: 13px; cursor: pointer; }}
 </style>
 </head>
 <body>
-<div class="no-print">
+{_print_controls()}
+<div class="no-print controls" style="margin-top:0">
   <button class="print-btn" onclick="window.print()">Print Statement</button>
 </div>
 <h1>{club} – Account Statement</h1>
@@ -397,6 +451,67 @@ def statement(member_id: int):
   <tbody>{rows_html}</tbody>
 </table>
 <div class="balance-box">Current Balance: <span>{fmt(balance)}</span></div>
+{_print_size_script()}
+</body>
+</html>"""
+
+@app.get("/receipt/{entry_id}", response_class=HTMLResponse)
+def receipt(entry_id: int):
+    with db_conn() as conn:
+        entry = conn.execute("SELECT * FROM ledger_entries WHERE id=?", (entry_id,)).fetchone()
+        if not entry:
+            raise HTTPException(404, "Receipt not found")
+        member = conn.execute("SELECT * FROM members WHERE id=?", (entry["member_id"],)).fetchone()
+        balance_after = conn.execute("""
+            SELECT COALESCE(SUM(CASE WHEN type='topup' THEN amount ELSE -amount END), 0)
+            FROM ledger_entries WHERE member_id=? AND id<=?
+        """, (entry["member_id"], entry_id)).fetchone()[0]
+
+    sym = CONFIG["currency_symbol"]
+    div = CONFIG["currency_divisor"]
+    club = CONFIG["club_name"]
+
+    def fmt(p):
+        return f"{sym}{p/div:.2f}"
+
+    type_label = "Top-up" if entry["type"] == "topup" else "Charge"
+    amount_colour = "#080" if entry["type"] == "topup" else "#c00"
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Receipt – {member['name']}</title>
+<style>
+  {PRINT_CSS}
+  .receipt-title {{ font-size: 15px; color: #555; margin-bottom: 20px; }}
+  table {{ border-collapse: collapse; }}
+  td {{ padding: 5px 16px 5px 0; vertical-align: top; }}
+  td:first-child {{ font-weight: 600; color: #555; white-space: nowrap; min-width: 110px; }}
+  .amount {{ font-size: 24px; font-weight: bold; color: {amount_colour}; }}
+  .balance {{ font-size: 20px; font-weight: bold; }}
+  hr {{ border: none; border-top: 1px solid #ccc; margin: 16px 0; }}
+</style>
+</head>
+<body>
+{_print_controls()}
+<div class="no-print controls" style="margin-top:0">
+  <button class="print-btn" onclick="window.print()">Print Receipt</button>
+</div>
+<h1>{club}</h1>
+<div class="receipt-title">{type_label} Receipt</div>
+<hr>
+<table>
+  <tr><td>Member</td><td><strong>{member['name']}</strong></td></tr>
+  <tr><td>Member #</td><td>{member['member_number']}</td></tr>
+  <tr><td>Type</td><td>{type_label}</td></tr>
+  <tr><td>Amount</td><td class="amount">{fmt(entry['amount'])}</td></tr>
+  <tr><td>Balance after</td><td class="balance">{fmt(balance_after)}</td></tr>
+  <tr><td>Staff</td><td>{entry['staff_name']}</td></tr>
+  <tr><td>Note</td><td>{entry['note'] or '—'}</td></tr>
+  <tr><td>Date / Time</td><td>{entry['created_at']} UTC</td></tr>
+</table>
+{_print_size_script()}
 </body>
 </html>"""
 
@@ -443,10 +558,38 @@ def create_product(body: ProductCreate):
         )
         return {"id": cur.lastrowid, "ok": True}
 
+# ---------------------------------------------------------------------------
+# Staff endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/staff")
+def get_staff():
+    return {"staff": load_staff()}
+
+@app.post("/staff")
+def add_staff(body: StaffAdd):
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(400, "Name cannot be empty")
+    staff = load_staff()
+    if name not in staff:
+        staff.append(name)
+        save_staff(staff)
+    return {"staff": sorted(staff)}
+
+@app.delete("/staff/{name}")
+def remove_staff(name: str):
+    staff = [s for s in load_staff() if s != name]
+    save_staff(staff)
+    return {"staff": staff}
+
+# ---------------------------------------------------------------------------
+# Config endpoint
+# ---------------------------------------------------------------------------
+
 @app.get("/config")
 def get_config():
-    safe = {k: v for k, v in CONFIG.items() if k != "db_path"}
-    return safe
+    return {k: v for k, v in CONFIG.items() if k != "db_path"}
 
 if __name__ == "__main__":
     import uvicorn

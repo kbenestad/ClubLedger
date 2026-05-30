@@ -45,6 +45,18 @@ nav {
 .nav-btn:hover { background: rgba(255,255,255,.1); }
 .nav-btn.active { border-color: #4a9eff; color: #fff; }
 
+.nav-link {
+  color: var(--nav-text);
+  text-decoration: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  font-size: .95rem;
+  transition: background .15s, border-color .15s;
+}
+.nav-link:hover { background: rgba(255,255,255,.1); }
+.nav-link.active { border-color: #4a9eff; color: #fff; }
+
 /* ---- Views ---- */
 .view { max-width: 900px; margin: 28px auto; padding: 0 16px; display: flex; flex-direction: column; gap: 24px; }
 .hidden { display: none !important; }
@@ -140,6 +152,42 @@ nav {
 }
 .product-item:hover { background: #f0fff4; border-color: #34d399; }
 .product-price { font-weight: 700; color: var(--primary); }
+
+/* ---- Staff chips ---- */
+.staff-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.staff-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #eef2ff;
+  border: 1px solid #c7d2f7;
+  border-radius: 20px;
+  padding: 4px 10px 4px 12px;
+  font-size: .88rem;
+}
+.chip-del {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #888;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0;
+}
+.chip-del:hover { color: var(--danger); }
+
+/* ---- Select / dropdown ---- */
+.form-row select {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 1rem;
+  outline: none;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color .15s;
+}
+.form-row select:focus { border-color: var(--primary); }
 
 /* ---- Messages ---- */
 .msg { margin-top: 12px; padding: 10px 14px; border-radius: 6px; font-size: .93rem; }
