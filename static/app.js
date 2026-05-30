@@ -438,6 +438,7 @@ async function loadAdminSettings() {
     document.getElementById('s-max-topup').value        = ((s.max_topup  || 0) / div).toFixed(2);
     document.getElementById('s-max-charge').value       = ((s.max_charge || 0) / div).toFixed(2);
     document.getElementById('s-overdraft-policy').value = s.overdraft_policy || 'never';
+    document.getElementById('s-timezone').value         = s.timezone         || '';
     document.getElementById('s-min-hint').textContent   = `in ${majorUnit}`;
     document.getElementById('s-max-hint').textContent   = `in ${majorUnit}`;
     document.getElementById('s-charge-hint').textContent= `in ${majorUnit}`;
@@ -500,6 +501,7 @@ async function saveSettings() {
     max_topup:              Math.round(parseFloat(_sv('s-max-topup'))  * div),
     max_charge:             Math.round(parseFloat(_sv('s-max-charge')) * div),
     overdraft_policy:       _sv('s-overdraft-policy'),
+    timezone:               _svt('s-timezone'),
     // Business address
     biz_address1:  _svt('s-biz-address1'),
     biz_address2:  _svt('s-biz-address2'),

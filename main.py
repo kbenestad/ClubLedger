@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 import bcrypt
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from fastapi import FastAPI, HTTPException, Cookie, Depends, Response, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,6 +22,22 @@ from pydantic import BaseModel, field_validator
 # ---------------------------------------------------------------------------
 # Hard defaults (overridden by app_settings table via Admin area)
 # ---------------------------------------------------------------------------
+
+def _server_timezone() -> str:
+    """Detect the server's IANA timezone name for use as the default."""
+    try:
+        p = Path('/etc/timezone')
+        if p.exists():
+            return p.read_text().strip()
+        p = Path('/etc/localtime')
+        if p.is_symlink():
+            target = str(p.resolve())
+            if 'zoneinfo/' in target:
+                return target.split('zoneinfo/', 1)[-1]
+    except Exception:
+        pass
+    return 'UTC'
+
 CONFIG = {
     "club_name":              "ClubLedger",
     "currency_symbol":        "£",
@@ -69,6 +86,8 @@ CONFIG = {
     "receipt_footer":         "",
     "receipt_footer_charge":  "",
     "receipt_footer_cashier": "",
+    # Timezone for display (IANA name); defaults to server local timezone
+    "timezone":               _server_timezone(),
 }
 
 DB_PATH  = "clubledger.db"
@@ -272,6 +291,33 @@ def format_amount(pence: int) -> str:
     div = _settings.get("currency_divisor") or CONFIG["currency_divisor"]
     return f"{sym}{pence / div:.2f}"
 
+def _display_tz(s: dict):
+    """Return a ZoneInfo (or local tzinfo) for the configured display timezone."""
+    tz_name = (s.get("timezone") or "").strip()
+    if tz_name:
+        try:
+            return ZoneInfo(tz_name)
+        except (ZoneInfoNotFoundError, KeyError):
+            pass
+    return datetime.now().astimezone().tzinfo  # server local
+
+def _fmt_dt(dt_str: str, s: dict) -> str:
+    """Convert a stored UTC datetime string to the configured display timezone."""
+    try:
+        dt_utc = datetime.fromisoformat(dt_str.replace(' ', 'T')).replace(tzinfo=timezone.utc)
+        local  = dt_utc.astimezone(_display_tz(s))
+        return local.strftime('%Y-%m-%d %H:%M %Z')
+    except Exception:
+        return dt_str[:16] + ' UTC'
+
+def _now_display(s: dict) -> str:
+    """Current time formatted in the configured display timezone."""
+    try:
+        local = datetime.now(timezone.utc).astimezone(_display_tz(s))
+        return local.strftime('%Y-%m-%d %H:%M %Z')
+    except Exception:
+        return datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+
 def load_staff() -> list:
     if STAFF_FILE.exists():
         return json.loads(STAFF_FILE.read_text()).get("staff", [])
@@ -451,6 +497,8 @@ class AppSettingsUpdate(BaseModel):
     receipt_footer:         Optional[str]  = None
     receipt_footer_charge:  Optional[str]  = None
     receipt_footer_cashier: Optional[str]  = None
+    # Timezone
+    timezone:               Optional[str]  = None
 
 # ---------------------------------------------------------------------------
 # Page routes
@@ -833,7 +881,7 @@ def statement(member_id: int):
             type_lbl = "Charge"
 
         rows_html += (
-            f"<tr><td>{r['created_at'][:16]}</td><td>{txn_ref}</td>"
+            f"<tr><td>{_fmt_dt(r['created_at'], s)}</td><td>{txn_ref}</td>"
             f"<td>{type_lbl}</td><td>{venue}</td><td>{r['staff_name']}</td>"
             f"<td class='rnum'>{amt_html}</td><td class='rnum'>{fmt(running)}</td></tr>"
         )
@@ -863,7 +911,7 @@ def statement(member_id: int):
 <h2>Account Statement</h2>
 <div class="stmt-info">
   Member: <strong>{member['name']}</strong> &mdash; #{member['member_number']} &mdash;
-  Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC
+  Generated: {_now_display(s)}
 </div>
 <table><thead><tr>
   <th>Date and Time</th><th>Reference</th><th>Type</th><th>Venue</th>
@@ -893,7 +941,7 @@ def receipt(entry_id: int):
     venue_name = s.get("bar_name","Bar") if entry["venue"]=="bar" else s.get("cashier_name","Cashier")
     tf_type    = entry["transfer_type"] or ""
     tf_ref     = entry["transfer_ref"]  or ""
-    timestamp  = entry["created_at"][:16] + " UTC"
+    timestamp  = _fmt_dt(entry["created_at"], s)
 
     lbl_staff     = s.get("lbl_staff",            "STAFF")
     lbl_txn       = s.get("lbl_transaction",       "TRANSACTION")
