@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 import bcrypt
-from fastapi import FastAPI, HTTPException, Cookie, Depends, Response
+from fastapi import FastAPI, HTTPException, Cookie, Depends, Response, UploadFile, File
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, field_validator
@@ -43,6 +43,8 @@ CONFIG = {
     # Branding
     "logo_url":               "",
     "logo_align":             "left",
+    "logo_max_width":         200,
+    "logo_max_height":        80,
     "bar_name":               "Bar",
     "cashier_name":           "Cashier",
     # Transactions
@@ -423,6 +425,8 @@ class AppSettingsUpdate(BaseModel):
     # Branding
     logo_url:               Optional[str]  = None
     logo_align:             Optional[str]  = None
+    logo_max_width:         Optional[int]  = None
+    logo_max_height:        Optional[int]  = None
     bar_name:               Optional[str]  = None
     cashier_name:           Optional[str]  = None
     # Transactions
@@ -690,7 +694,7 @@ def _print_size_script():
 function setSize(s){
   var el=document.getElementById('psStyle');
   if(!el){el=document.createElement('style');el.id='psStyle';document.head.appendChild(el);}
-  el.textContent='@media print{@page{size:'+s+';margin:'+(s==='A5'?'8mm':'14mm')+';}}';}
+  el.textContent='@media print{@page{size:'+s+';margin:'+(s==='A5'?'10mm':'16mm')+';}}';}
 setSize('A4');
 </script>"""
 
@@ -699,6 +703,7 @@ def _print_controls():
   <span class="size-label">Paper:</span>
   <label><input type="radio" name="ps" value="A4" checked onchange="setSize('A4')"> A4</label>
   <label><input type="radio" name="ps" value="A5" onchange="setSize('A5')"> A5</label>
+  <button class="print-btn" onclick="window.print()">Print</button>
 </div>"""
 
 def _txn_ref(entry_id: int, s: dict) -> str:
@@ -709,57 +714,86 @@ def _logo_html(s: dict) -> str:
     url = (s.get("logo_url") or "").strip()
     if not url:
         return ""
-    align = s.get("logo_align", "left")
-    css_cls = f"biz-logo align-{align}" if align in ("left", "center", "right") else "biz-logo align-left"
-    return f'<img src="{url}" class="{css_cls}" alt="logo">'
+    align  = s.get("logo_align", "left")
+    max_w  = int(s.get("logo_max_width",  200) or 200)
+    max_h  = int(s.get("logo_max_height",  80) or 80)
+    style  = f"max-width:{max_w}px;max-height:{max_h}px;"
+    css_cl = f"biz-logo align-{align}" if align in ("left","center","right") else "biz-logo"
+    return f'<img src="{url}" class="{css_cl}" style="{style}" alt="logo">'
 
 def _biz_header_html(s: dict) -> str:
-    parts = [_logo_html(s)]
-    parts.append(f'<div class="biz-name">{s.get("club_name") or "ClubLedger"}</div>')
-    addr = [s.get(f"biz_address{i}", "") for i in range(1, 5)] + [s.get("biz_country", "")]
-    addr = [l.strip() for l in addr if l and l.strip()]
-    if addr:
-        parts.append('<div class="biz-address">' + "<br>".join(addr) + "</div>")
-    contact = [x for x in [s.get("biz_phone",""), s.get("biz_email",""), s.get("biz_website","")] if x and x.strip()]
-    if contact:
-        parts.append('<div class="biz-contact">' + " &nbsp;|&nbsp; ".join(contact) + "</div>")
-    return '<div class="biz-header">' + "\n".join(p for p in parts if p) + "</div>"
+    logo = _logo_html(s)
+    name = s.get("club_name") or "ClubLedger"
+
+    addr = [( s.get(f"biz_address{i}") or "").strip() for i in range(1,5)]
+    addr += [(s.get("biz_country") or "").strip()]
+    addr = [l for l in addr if l]
+
+    contacts = []
+    if (s.get("biz_phone") or "").strip():   contacts.append(f'Tel. &nbsp; {s["biz_phone"]}')
+    if (s.get("biz_email") or "").strip():   contacts.append(f'Email: {s["biz_email"]}')
+    if (s.get("biz_website") or "").strip(): contacts.append(f'Web: &nbsp; {s["biz_website"]}')
+
+    parts = []
+    if logo: parts.append(logo)
+    parts.append(f'<div class="biz-name">{name}</div>')
+
+    if addr and contacts:
+        parts.append(
+            f'<div class="biz-info-row">'
+            f'<div class="biz-addr">{"<br>".join(addr)}</div>'
+            f'<div class="biz-contacts">{"<br>".join(contacts)}</div>'
+            f'</div>'
+        )
+    elif addr:
+        parts.append(f'<div class="biz-addr">{"<br>".join(addr)}</div>')
+    elif contacts:
+        parts.append(f'<div class="biz-addr">{"<br>".join(contacts)}</div>')
+
+    return '<div class="biz-header">' + "\n".join(parts) + "</div>"
+
+def _rx_cell(label: str, value: str, extra_cls: str = "") -> str:
+    val_cls = ("rx-val " + extra_cls).strip()
+    return f'<div class="rx-cell"><div class="rx-lbl">{label}</div><div class="{val_cls}">{value}</div></div>'
 
 RECEIPT_CSS = """
-  body{font-family:Arial,sans-serif;font-size:11px;color:#111;margin:24px;}
-  h2{font-size:14px;font-weight:bold;margin:10px 0 4px;}
-  hr{border:none;border-top:1px solid #ccc;margin:10px 0;}
-  .controls{display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap;}
-  .size-label{font-size:12px;color:#555;} .controls label{font-size:12px;cursor:pointer;}
-  .print-btn{padding:7px 18px;font-size:13px;cursor:pointer;margin-left:auto;}
+  body{font-family:Arial,sans-serif;font-size:11pt;color:#111;margin:28px;}
+  hr{border:none;border-top:1px solid #ccc;margin:12px 0;}
+  .controls{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+  .size-label{font-size:10pt;color:#555;}
+  .controls label{font-size:10pt;cursor:pointer;}
+  .print-btn{padding:6px 16px;font-size:10pt;cursor:pointer;margin-left:auto;}
   @media print{.no-print{display:none;}}
-  .biz-header{margin-bottom:4px;}
-  .biz-logo{max-height:60px;max-width:200px;display:block;margin-bottom:4px;}
+  /* Business header */
+  .biz-logo{display:block;margin-bottom:8px;}
   .biz-logo.align-center{margin-left:auto;margin-right:auto;}
   .biz-logo.align-right{margin-left:auto;}
-  .biz-name{font-size:15px;font-weight:bold;margin:2px 0;}
-  .biz-address{color:#555;line-height:1.5;}
-  .biz-contact{color:#555;margin-top:3px;}
-  .receipt-title{font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:.04em;margin:10px 0 6px;}
-  .member-section{display:flex;justify-content:space-between;align-items:baseline;margin:5px 0;}
-  .member-name{font-size:13px;font-weight:bold;}
-  .member-num{color:#555;}
-  .receipt-grid{display:grid;grid-template-columns:auto 1fr;gap:3px 14px;margin:6px 0;}
-  .rlbl{font-weight:600;color:#555;white-space:nowrap;font-size:10px;text-transform:uppercase;letter-spacing:.03em;}
-  .rval{text-align:right;}
-  .section-head{grid-column:span 2;font-weight:bold;font-size:11px;text-transform:uppercase;letter-spacing:.04em;margin:6px 0 2px;}
-  .charge-val{font-size:20px;font-weight:bold;color:#c00;}
-  .credit-val{font-size:20px;font-weight:bold;color:#080;}
-  .balance-val{font-size:14px;font-weight:bold;}
-  table{width:100%;border-collapse:collapse;margin-top:10px;}
-  th{background:#222;color:#fff;padding:5px 8px;text-align:left;font-size:10px;}
-  td{padding:4px 8px;border-bottom:1px solid #e0e0e0;}
-  .num{text-align:right;font-variant-numeric:tabular-nums;}
-  .red{color:#c00;} .grn{color:#080;}
-  .balance-box{margin-top:12px;text-align:right;font-size:14px;}
-  .balance-box span{font-weight:bold;font-size:18px;}
-  .sub-row td{font-size:10px;color:#777;padding-top:0;border-bottom:none;padding-left:24px;}
-  .footer{margin-top:14px;font-size:10px;color:#888;text-align:center;white-space:pre-wrap;}
+  .biz-name{font-size:14pt;font-weight:bold;margin:4px 0 6px;}
+  .biz-info-row{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;font-size:10pt;line-height:1.7;}
+  .biz-addr{line-height:1.7;}
+  .biz-contacts{text-align:right;white-space:nowrap;line-height:1.7;}
+  /* Receipt */
+  .rx-title{font-size:13pt;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;margin:14px 0 12px;}
+  .rx-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 40px;margin:10px 0;}
+  .rx-cell{}
+  .rx-lbl{font-size:9pt;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px;}
+  .rx-val{font-size:11pt;}
+  .rx-val.bold{font-weight:bold;}
+  .rx-val.large{font-size:13pt;font-weight:bold;}
+  .rx-val.charge{color:#c00;}
+  .rx-val.credit{color:#080;}
+  .footer{margin-top:20px;font-size:10pt;color:#444;line-height:1.7;white-space:pre-wrap;}
+  /* Statement */
+  h2{font-size:13pt;font-weight:bold;margin:14px 0 4px;}
+  .stmt-info{font-size:10pt;color:#555;margin-bottom:12px;line-height:1.6;}
+  table{width:100%;border-collapse:collapse;margin-top:4px;font-size:10pt;}
+  th{border-bottom:2px solid #222;padding:6px 8px 6px 0;text-align:left;font-size:9pt;font-weight:700;white-space:nowrap;}
+  td{padding:5px 8px 5px 0;border-bottom:1px solid #e0e0e0;vertical-align:top;}
+  th.rnum,td.rnum{text-align:right;padding-right:0;}
+  .credit{color:#080;}
+  .debit{color:#c00;}
+  .sub-row td{font-size:10pt;color:#555;padding-top:0;border-bottom:none;padding-left:88px;}
+  .balance-box{margin-top:14px;text-align:right;font-size:11pt;font-weight:bold;}
 """
 
 @app.get("/members/{member_id}/statement", response_class=HTMLResponse)
@@ -775,55 +809,67 @@ def statement(member_id: int):
         bal = member_balance(conn, member_id)
 
     sym, div = s.get("currency_symbol","£"), s.get("currency_divisor",100)
-    footer = s.get("receipt_footer","")
-    bar_name = s.get("bar_name","Bar")
-    cashier_name = s.get("cashier_name","Cashier")
+    footer      = s.get("receipt_footer","")
+    bar_name    = s.get("bar_name","Bar")
+    cashier_name= s.get("cashier_name","Cashier")
 
     def fmt(p): return f"{sym}{p/div:.2f}"
-    def venue_label(v): return bar_name if v == "bar" else cashier_name
 
     rows_html, running = "", 0
     for r in rows:
         txn_ref = _txn_ref(r["id"], s)
+        venue   = bar_name if r["venue"] == "bar" else cashier_name
         if r["type"] == "topup":
-            running += r["amount"]; dr, cr = "", fmt(r["amount"]); type_lbl = "Top-up"
+            running += r["amount"]
+            amt_html = f'<span class="credit">+ {fmt(r["amount"])}</span>'
+            type_lbl = "Top-up"
         elif r["type"] == "withdrawal":
-            running -= r["amount"]; dr, cr = fmt(r["amount"]), ""; type_lbl = "Withdrawal"
+            running -= r["amount"]
+            amt_html = f'<span class="debit">- {fmt(r["amount"])}</span>'
+            type_lbl = "Withdrawal"
         else:
-            running -= r["amount"]; dr, cr = fmt(r["amount"]), ""; type_lbl = "Charge"
-        rows_html += (f"<tr><td>{r['created_at'][:16]}</td><td>{type_lbl}</td>"
-                      f"<td>{venue_label(r['venue'])}</td><td>{txn_ref}</td>"
-                      f"<td>{r['note'] or ''}</td><td>{r['staff_name']}</td>"
-                      f"<td class='num red'>{dr}</td><td class='num grn'>{cr}</td>"
-                      f"<td class='num'>{fmt(running)}</td></tr>")
-        if r["type"] in ("topup", "withdrawal"):
+            running -= r["amount"]
+            amt_html = f'<span class="debit">- {fmt(r["amount"])}</span>'
+            type_lbl = "Charge"
+
+        rows_html += (
+            f"<tr><td>{r['created_at'][:16]}</td><td>{txn_ref}</td>"
+            f"<td>{type_lbl}</td><td>{venue}</td><td>{r['staff_name']}</td>"
+            f"<td class='rnum'>{amt_html}</td><td class='rnum'>{fmt(running)}</td></tr>"
+        )
+
+        # Detail sub-row
+        sub = ""
+        if r["type"] in ("topup","withdrawal"):
             tf_type = r["transfer_type"] or ""
             tf_ref  = r["transfer_ref"]  or ""
-            if tf_type or tf_ref:
-                sub = " &nbsp;·&nbsp; ".join(filter(None, [
-                    f"Type: {tf_type}" if tf_type else "",
-                    f"Ref: {tf_ref}"   if tf_ref  else "",
-                ]))
-                rows_html += f'<tr class="sub-row"><td colspan="9">{sub}</td></tr>'
+            if tf_type and tf_ref:
+                sub = f"Transfer type: {tf_type} &mdash; {tf_ref}"
+            elif tf_type:
+                sub = f"Transfer type: {tf_type}"
+            elif tf_ref:
+                sub = f"Ref: {tf_ref}"
+        elif r["note"]:
+            sub = r["note"]
+
+        if sub:
+            rows_html += f'<tr class="sub-row"><td colspan="7">{sub}</td></tr>'
 
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
-<title>Statement – {member['name']}</title><style>{RECEIPT_CSS}</style></head><body>
+<title>Statement &mdash; {member['name']}</title><style>{RECEIPT_CSS}</style></head><body>
 {_print_controls()}
-<div class="no-print controls" style="margin-top:0">
-  <button class="print-btn" onclick="window.print()">Print Statement</button>
-</div>
 {_biz_header_html(s)}
 <hr>
 <h2>Account Statement</h2>
-<div style="margin-bottom:10px;color:#555;font-size:11px;">
-  Member: <strong>{member['name']}</strong> &nbsp;|&nbsp; #{member['member_number']} &nbsp;|&nbsp;
+<div class="stmt-info">
+  Member: <strong>{member['name']}</strong> &mdash; #{member['member_number']} &mdash;
   Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')} UTC
 </div>
 <table><thead><tr>
-  <th>Date/Time</th><th>Type</th><th>Venue</th><th>Reference</th><th>Note</th>
-  <th>Staff</th><th class="num">Charge</th><th class="num">Credit</th><th class="num">Balance</th>
+  <th>Date and Time</th><th>Reference</th><th>Type</th><th>Venue</th>
+  <th>Staff</th><th class="rnum">Amount</th><th class="rnum">Balance</th>
 </tr></thead><tbody>{rows_html}</tbody></table>
-<div class="balance-box">Current Balance: <span>{fmt(bal)}</span></div>
+<div class="balance-box">Current Balance: {fmt(bal)}</div>
 {('<div class="footer">' + footer + '</div>') if footer else ''}
 {_print_size_script()}</body></html>"""
 
@@ -839,80 +885,86 @@ def receipt(entry_id: int):
             FROM ledger_entries WHERE member_id=? AND id<=?
         """, (entry["member_id"], entry_id)).fetchone()[0]
 
-    sym, div = s.get("currency_symbol","£"), s.get("currency_divisor",100)
+    sym, div   = s.get("currency_symbol","£"), s.get("currency_divisor",100)
     def fmt(p): return f"{sym}{p/div:.2f}"
 
-    txn_ref = _txn_ref(entry_id, s)
-    etype   = entry["type"]
-    venue_name = s.get("bar_name","Bar") if entry["venue"] == "bar" else s.get("cashier_name","Cashier")
+    txn_ref    = _txn_ref(entry_id, s)
+    etype      = entry["type"]
+    venue_name = s.get("bar_name","Bar") if entry["venue"]=="bar" else s.get("cashier_name","Cashier")
+    tf_type    = entry["transfer_type"] or ""
+    tf_ref     = entry["transfer_ref"]  or ""
+    timestamp  = entry["created_at"][:16] + " UTC"
 
-    lbl_staff     = s.get("lbl_staff", "STAFF")
-    lbl_txn       = s.get("lbl_transaction", "TRANSACTION")
-    lbl_txn_time  = s.get("lbl_txn_time", "TRANSACTION TIME")
+    lbl_staff     = s.get("lbl_staff",            "STAFF")
+    lbl_txn       = s.get("lbl_transaction",       "TRANSACTION")
+    lbl_txn_time  = s.get("lbl_txn_time",          "TRANSACTION TIME")
     lbl_remaining = s.get("lbl_remaining_balance", "REMAINING BALANCE")
 
     if etype == "topup":
-        title  = s.get("lbl_topup_receipt", "TOP-UP RECEIPT")
-        footer = s.get("receipt_footer_cashier") or s.get("receipt_footer", "")
+        title        = s.get("lbl_topup_receipt",    "TOP-UP RECEIPT")
+        footer       = s.get("receipt_footer_cashier") or s.get("receipt_footer","")
+        lbl_tf_sec   = s.get("lbl_balance_transfer", "BALANCE TRANSFER")
+        lbl_amount   = s.get("lbl_amount_topup",     "AMOUNT TOPPED-UP")
+        tf_label     = "Top-up"
+        amount_cls   = "large credit"
     elif etype == "withdrawal":
-        title  = s.get("lbl_withdrawal_receipt", "WITHDRAWAL RECEIPT")
-        footer = s.get("receipt_footer_cashier") or s.get("receipt_footer", "")
+        title        = s.get("lbl_withdrawal_receipt","WITHDRAWAL RECEIPT")
+        footer       = s.get("receipt_footer_cashier") or s.get("receipt_footer","")
+        lbl_tf_sec   = s.get("lbl_balance_transfer", "BALANCE TRANSFER")
+        lbl_amount   = s.get("lbl_amount_withdrawal","AMOUNT WITHDRAWN")
+        tf_label     = "Withdrawal"
+        amount_cls   = "large charge"
     else:
-        title  = s.get("lbl_receipt", "RECEIPT")
-        footer = s.get("receipt_footer_charge") or s.get("receipt_footer", "")
+        title        = s.get("lbl_receipt",           "RECEIPT")
+        footer       = s.get("receipt_footer_charge") or s.get("receipt_footer","")
+        lbl_charge   = s.get("lbl_charge_venue",      "CHARGE")
+        lbl_amount   = s.get("lbl_amount_charged",    "AMOUNT CHARGED")
 
     if etype == "charge":
-        lbl_charge = s.get("lbl_charge_venue", "CHARGE")
-        lbl_amount = s.get("lbl_amount_charged", "AMOUNT CHARGED")
-        grid_details = (
-            f'<div class="rlbl">{lbl_staff}</div><div class="rval">{entry["staff_name"]}</div>'
-            f'<div class="rlbl">{lbl_txn}</div><div class="rval">{txn_ref}</div>'
-            f'<div class="rlbl">{lbl_charge}</div><div class="rval">{venue_name}</div>'
-            f'<div class="rlbl">{lbl_txn_time}</div><div class="rval">{entry["created_at"][:16]} UTC</div>'
-        )
-        grid_amounts = (
-            f'<div class="rlbl">{lbl_amount}</div><div class="rval charge-val">{fmt(entry["amount"])}</div>'
-            f'<div class="rlbl">{lbl_remaining}</div><div class="rval balance-val">{fmt(bal_after)}</div>'
-        )
+        body_html = f"""<div class="rx-grid">
+  {_rx_cell(lbl_staff, entry['staff_name'])}
+  {_rx_cell(lbl_txn, txn_ref)}
+</div>
+<hr>
+<div class="rx-grid">
+  {_rx_cell(lbl_charge, venue_name)}
+  {_rx_cell(lbl_txn_time, timestamp)}
+</div>
+<hr>
+<div class="rx-grid">
+  {_rx_cell(lbl_amount, fmt(entry['amount']), 'large charge')}
+  {_rx_cell(lbl_remaining, fmt(bal_after), 'large')}
+</div>"""
     else:
-        lbl_tf_section = s.get("lbl_balance_transfer", "BALANCE TRANSFER")
-        lbl_tf_type    = s.get("lbl_transfer_type", "TRANSFER TYPE")
-        lbl_tf_ref     = s.get("lbl_transfer_ref",  "TRANSFER REFERENCE")
-        lbl_amount     = s.get("lbl_amount_topup", "AMOUNT TOPPED-UP") if etype == "topup" else s.get("lbl_amount_withdrawal", "AMOUNT WITHDRAWN")
-        tf_type = entry["transfer_type"] or ""
-        tf_ref  = entry["transfer_ref"]  or ""
-        grid_details = (
-            f'<div class="rlbl">{lbl_staff}</div><div class="rval">{entry["staff_name"]}</div>'
-            f'<div class="rlbl">{lbl_txn}</div><div class="rval">{txn_ref}</div>'
-            f'<div class="rlbl">{lbl_txn_time}</div><div class="rval">{entry["created_at"][:16]} UTC</div>'
-        )
-        tf_rows = ""
-        if tf_type: tf_rows += f'<div class="rlbl">{lbl_tf_type}</div><div class="rval">{tf_type}</div>'
-        if tf_ref:  tf_rows += f'<div class="rlbl">{lbl_tf_ref}</div><div class="rval">{tf_ref}</div>'
-        grid_amounts = (
-            f'<div class="section-head">{lbl_tf_section}</div>'
-            f'{tf_rows}'
-            f'<div class="rlbl">{lbl_amount}</div><div class="rval credit-val">{fmt(entry["amount"])}</div>'
-            f'<div class="rlbl">{lbl_remaining}</div><div class="rval balance-val">{fmt(bal_after)}</div>'
-        )
+        lbl_tf_type = s.get("lbl_transfer_type", "TRANSFER TYPE")
+        lbl_tf_ref  = s.get("lbl_transfer_ref",  "TRANSFER REFERENCE")
+        body_html = f"""<div class="rx-grid">
+  {_rx_cell(lbl_staff, entry['staff_name'])}
+  {_rx_cell(lbl_txn, txn_ref)}
+</div>
+<hr>
+<div class="rx-grid">
+  {_rx_cell(lbl_tf_sec, tf_label)}
+  {_rx_cell(lbl_txn_time, timestamp)}
+</div>
+<hr>
+<div class="rx-grid">
+  {_rx_cell(lbl_amount, fmt(entry['amount']), amount_cls)}
+  {_rx_cell(lbl_remaining, fmt(bal_after), 'large')}
+</div>
+<hr>
+<div class="rx-grid">
+  {_rx_cell(lbl_tf_type, tf_type or '&mdash;')}
+  {_rx_cell(lbl_tf_ref,  tf_ref  or '&mdash;')}
+</div>"""
 
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
-<title>Receipt – {member['name']}</title><style>{RECEIPT_CSS}</style></head><body>
+<title>Receipt &mdash; {member['name']}</title><style>{RECEIPT_CSS}</style></head><body>
 {_print_controls()}
-<div class="no-print controls" style="margin-top:0">
-  <button class="print-btn" onclick="window.print()">Print Receipt</button>
-</div>
 {_biz_header_html(s)}
 <hr>
-<div class="receipt-title">{title}</div>
-<div class="member-section">
-  <div class="member-name">{member['name']}</div>
-  <div class="member-num">#{member['member_number']}</div>
-</div>
-<hr>
-<div class="receipt-grid">{grid_details}</div>
-<hr>
-<div class="receipt-grid">{grid_amounts}</div>
+<div class="rx-title">{title}</div>
+{body_html}
 <hr>
 {('<div class="footer">' + footer + '</div>') if footer else ''}
 {_print_size_script()}</body></html>"""
@@ -1061,6 +1113,27 @@ def update_admin_settings(body: AppSettingsUpdate, user: dict = Depends(admin_us
                 )
     refresh_settings()
     return _settings
+
+# ---------------------------------------------------------------------------
+# Admin – logo upload
+# ---------------------------------------------------------------------------
+
+@app.post("/admin/logo")
+async def upload_logo(file: UploadFile = File(...), user: dict = Depends(admin_user)):
+    content_type = file.content_type or ""
+    if not content_type.startswith("image/"):
+        raise HTTPException(400, "Only image files are allowed")
+    suffix = Path(file.filename or "logo.png").suffix.lower()
+    if suffix not in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"):
+        suffix = ".png"
+    dest = static_dir / f"logo{suffix}"
+    dest.write_bytes(await file.read())
+    url = f"/static/logo{suffix}"
+    with db_conn() as conn:
+        conn.execute("INSERT OR REPLACE INTO app_settings (key,value) VALUES (?,?)",
+                     ("logo_url", json.dumps(url)))
+    refresh_settings()
+    return {"url": url}
 
 # ---------------------------------------------------------------------------
 # Config (public – loaded by frontend before login screen shows)

@@ -398,6 +398,29 @@ async function doCharge() {
 // ---------------------------------------------------------------------------
 async function loadAdminView() {
   await Promise.all([loadAdminSettings(), loadStaffAccounts()]);
+  setupLogoUpload();
+}
+
+let _logoUploadWired = false;
+function setupLogoUpload() {
+  if (_logoUploadWired) return;
+  const input = document.getElementById('s-logo-upload');
+  if (!input) return;
+  _logoUploadWired = true;
+  input.addEventListener('change', async function() {
+    const file = this.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const r = await fetch('/admin/logo', { method: 'POST', body: fd });
+      const json = await r.json();
+      if (!r.ok) throw new Error(json.detail || 'Upload failed');
+      document.getElementById('s-logo-url').value = json.url;
+      setMsg('logoUploadMsg', 'Logo uploaded.', 'ok');
+    } catch (e) { setMsg('logoUploadMsg', e.message, 'err'); }
+    this.value = '';
+  });
 }
 
 async function loadAdminSettings() {
@@ -428,8 +451,10 @@ async function loadAdminSettings() {
     document.getElementById('s-biz-email').value    = s.biz_email    || '';
     document.getElementById('s-biz-website').value  = s.biz_website  || '';
     // Branding
-    document.getElementById('s-logo-url').value     = s.logo_url     || '';
-    document.getElementById('s-logo-align').value   = s.logo_align   || 'left';
+    document.getElementById('s-logo-url').value        = s.logo_url        || '';
+    document.getElementById('s-logo-align').value      = s.logo_align      || 'left';
+    document.getElementById('s-logo-max-width').value  = s.logo_max_width  || '';
+    document.getElementById('s-logo-max-height').value = s.logo_max_height || '';
     document.getElementById('s-bar-name').value     = s.bar_name     || '';
     document.getElementById('s-cashier-name').value = s.cashier_name || '';
     // Transactions
@@ -485,8 +510,10 @@ async function saveSettings() {
     biz_email:     _svt('s-biz-email'),
     biz_website:   _svt('s-biz-website'),
     // Branding
-    logo_url:      _svt('s-logo-url'),
-    logo_align:    _sv('s-logo-align'),
+    logo_url:        _svt('s-logo-url'),
+    logo_align:      _sv('s-logo-align'),
+    logo_max_width:  parseInt(_sv('s-logo-max-width'),  10) || null,
+    logo_max_height: parseInt(_sv('s-logo-max-height'), 10) || null,
     bar_name:      _svt('s-bar-name'),
     cashier_name:  _svt('s-cashier-name'),
     // Transactions

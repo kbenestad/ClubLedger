@@ -228,14 +228,26 @@
 
       <div class="panel-divider"></div>
       <h3 class="sub-heading">Branding</h3>
-      <div class="form-row"><label>Logo URL <span class="label-hint">(optional)</span></label>
+      <div class="form-row">
+        <label>Logo <span class="label-hint">(upload image file)</span></label>
+        <input type="file" id="s-logo-upload" accept="image/*" style="padding:4px 0;border:none;background:none;">
+        <div id="logoUploadMsg" class="msg" style="margin-top:4px"></div>
+      </div>
+      <div class="form-row"><label>Logo URL <span class="label-hint">(or paste URL; upload above sets this automatically)</span></label>
         <input type="text" id="s-logo-url" placeholder="https://..."></div>
-      <div class="form-row"><label>Logo alignment</label>
+      <div class="form-row">
+        <label>Logo alignment</label>
         <select id="s-logo-align">
           <option value="left">Left</option>
           <option value="center">Center</option>
           <option value="right">Right</option>
         </select>
+      </div>
+      <div class="form-row" style="flex-direction:row;gap:24px;align-items:flex-end">
+        <div style="flex:1"><label>Logo max width (px)</label>
+          <input type="number" id="s-logo-max-width" min="20" step="10" placeholder="200"></div>
+        <div style="flex:1"><label>Logo max height (px)</label>
+          <input type="number" id="s-logo-max-height" min="20" step="10" placeholder="80"></div>
       </div>
       <div class="form-row"><label>Bar venue name</label>
         <input type="text" id="s-bar-name" placeholder="Bar"></div>
