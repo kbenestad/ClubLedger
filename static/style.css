@@ -1,0 +1,148 @@
+/* ClubLedger – main styles */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --primary: #1a56db;
+  --primary-dark: #1140a6;
+  --danger: #d63b3b;
+  --danger-dark: #a82e2e;
+  --success: #1a7f3c;
+  --bg: #f4f6fb;
+  --panel-bg: #ffffff;
+  --border: #d1d5db;
+  --text: #111827;
+  --muted: #6b7280;
+  --nav-bg: #1a1a2e;
+  --nav-text: #e0e0e0;
+}
+
+body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ---- Nav ---- */
+nav {
+  background: var(--nav-bg);
+  color: var(--nav-text);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  height: 52px;
+  gap: 8px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.brand { font-size: 1.2rem; font-weight: 700; letter-spacing: .5px; margin-right: 16px; color: #fff; }
+.nav-btn {
+  background: transparent;
+  border: 2px solid transparent;
+  color: var(--nav-text);
+  padding: 6px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: .95rem;
+  transition: background .15s, border-color .15s;
+}
+.nav-btn:hover { background: rgba(255,255,255,.1); }
+.nav-btn.active { border-color: #4a9eff; color: #fff; }
+
+/* ---- Views ---- */
+.view { max-width: 900px; margin: 28px auto; padding: 0 16px; display: flex; flex-direction: column; gap: 24px; }
+.hidden { display: none !important; }
+
+/* ---- Panel ---- */
+.panel { background: var(--panel-bg); border: 1px solid var(--border); border-radius: 10px; padding: 24px; }
+.panel h2 { font-size: 1.15rem; margin-bottom: 18px; color: var(--text); }
+
+/* ---- Forms ---- */
+.form-row { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; }
+.form-row label { font-size: .85rem; font-weight: 600; color: var(--muted); }
+.form-row input {
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 1rem;
+  outline: none;
+  transition: border-color .15s;
+}
+.form-row input:focus { border-color: var(--primary); }
+
+.search-row { display: flex; gap: 8px; margin-bottom: 14px; }
+.search-row input { flex: 1; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; outline: none; }
+.search-row input:focus { border-color: var(--primary); }
+
+/* ---- Buttons ---- */
+.btn {
+  padding: 9px 20px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+  font-size: .95rem;
+  transition: background .15s;
+  margin-right: 6px;
+}
+.btn:hover { background: #f0f0f0; }
+.btn-primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn-danger:hover { background: var(--danger-dark); }
+
+/* ---- Data table ---- */
+.data-table { width: 100%; border-collapse: collapse; font-size: .93rem; margin-top: 8px; }
+.data-table th { background: #f0f2f7; padding: 8px 10px; text-align: left; font-weight: 600; border-bottom: 2px solid var(--border); }
+.data-table td { padding: 8px 10px; border-bottom: 1px solid #eee; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: #f9f9ff; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.balance-pos { color: var(--success); font-weight: 600; }
+.balance-neg { color: var(--danger); font-weight: 600; }
+
+/* ---- Member pick list ---- */
+.member-pick-list { margin-bottom: 14px; }
+.member-pick-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: background .12s, border-color .12s;
+}
+.member-pick-item:hover { background: #eef2ff; border-color: var(--primary); }
+.member-pick-name { font-weight: 600; }
+.member-pick-sub { font-size: .83rem; color: var(--muted); }
+
+/* ---- Selected member box ---- */
+.selected-member-box {
+  background: #eef2ff;
+  border: 1px solid #c7d2f7;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: .95rem;
+}
+.selected-member-box strong { font-size: 1.05rem; }
+
+/* ---- Product results ---- */
+.product-results { margin-bottom: 14px; }
+.product-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  margin-bottom: 5px;
+  cursor: pointer;
+  transition: background .12s;
+}
+.product-item:hover { background: #f0fff4; border-color: #34d399; }
+.product-price { font-weight: 700; color: var(--primary); }
+
+/* ---- Messages ---- */
+.msg { margin-top: 12px; padding: 10px 14px; border-radius: 6px; font-size: .93rem; }
+.msg:empty { display: none; }
+.msg.ok { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+.msg.err { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
