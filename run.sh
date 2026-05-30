@@ -9,6 +9,6 @@ if [ ! -d "$VENV" ]; then
     python3 -m venv "$VENV"
 fi
 
-"$VENV/bin/pip" install --quiet -r requirements.txt
+"$VENV/bin/pip" install -r requirements.txt
 
 exec "$VENV/bin/python" main.py "$@"
