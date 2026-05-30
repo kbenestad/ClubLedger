@@ -49,6 +49,10 @@ async function doLogin(e) {
 async function doLogout() {
   try { await fetch('/auth/logout', { method: 'POST' }); } catch (e) { /* ignore */ }
   currentUser = null;
+  // Reset tab visibility for next login
+  document.getElementById('adminTabBtn').classList.add('hidden');
+  document.querySelector('[data-view="cashier"]').classList.remove('hidden');
+  document.querySelector('[data-view="bar"]').classList.remove('hidden');
   // Reset to members tab
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.querySelector('[data-view="members"]').classList.add('active');
@@ -65,8 +69,15 @@ async function startApp() {
   if (brand) brand.textContent = cfg.club_name;
   document.getElementById('navUser').textContent = currentUser.name;
 
+  // Role-based tab visibility
   if (currentUser.role === 'admin') {
     document.getElementById('adminTabBtn').classList.remove('hidden');
+  }
+  if (currentUser.role === 'pos-staff') {
+    document.querySelector('[data-view="cashier"]').classList.add('hidden');
+  }
+  if (currentUser.role === 'cashier') {
+    document.querySelector('[data-view="bar"]').classList.add('hidden');
   }
 
   // Nav tab switching
@@ -98,6 +109,10 @@ async function startApp() {
 // ---------------------------------------------------------------------------
 // Amount helpers  (users enter major units, we send minor units)
 // ---------------------------------------------------------------------------
+
+const ROLE_LABELS = { admin: 'Admin', cashier: 'Cashier', 'pos-staff': 'POS Staff' };
+function fmtRole(role) { return ROLE_LABELS[role] || role; }
+
 function toMinor(inputId) {
   const v = parseFloat(document.getElementById(inputId).value);
   if (isNaN(v) || v <= 0) return null;
@@ -358,7 +373,7 @@ async function loadStaffAccounts() {
       <tr>
         <td>${esc(a.name)}</td>
         <td>${esc(a.username)}</td>
-        <td style="text-transform:capitalize">${esc(a.role)}</td>
+        <td>${esc(fmtRole(a.role))}</td>
         <td>${a.active ? '<span style="color:#080">Active</span>' : '<span style="color:#999">Inactive</span>'}</td>
         <td class="row-actions">
           <button class="btn row-btn" onclick="openEditAccountModal(${a.id},'${esc(a.name)}','${esc(a.username)}','${esc(a.role)}',${a.active})">Edit</button>

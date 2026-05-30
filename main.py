@@ -101,8 +101,8 @@ def init_db():
                 name          TEXT NOT NULL,
                 username      TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                role          TEXT NOT NULL DEFAULT 'staff'
-                                   CHECK(role IN ('staff','admin')),
+                role          TEXT NOT NULL DEFAULT 'pos-staff'
+                                   CHECK(role IN ('cashier','pos-staff','admin')),
                 active        INTEGER NOT NULL DEFAULT 1,
                 created_at    TEXT NOT NULL DEFAULT (datetime('now'))
             );
@@ -113,6 +113,36 @@ def init_db():
             CREATE INDEX IF NOT EXISTS idx_ledger_member
                 ON ledger_entries(member_id);
         """)
+
+def migrate_db():
+    """Run schema migrations that can't be expressed as CREATE TABLE IF NOT EXISTS."""
+    with db_conn() as conn:
+        schema = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='staff_accounts'"
+        ).fetchone()
+        if schema and "'pos-staff'" not in schema["sql"]:
+            # Recreate staff_accounts with new role set; convert 'staff' → 'pos-staff'
+            conn.execute("ALTER TABLE staff_accounts RENAME TO _staff_accounts_old")
+            conn.execute("""
+                CREATE TABLE staff_accounts (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name          TEXT NOT NULL,
+                    username      TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    role          TEXT NOT NULL DEFAULT 'pos-staff'
+                                       CHECK(role IN ('cashier','pos-staff','admin')),
+                    active        INTEGER NOT NULL DEFAULT 1,
+                    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+            """)
+            conn.execute("""
+                INSERT INTO staff_accounts
+                    SELECT id, name, username, password_hash,
+                           CASE role WHEN 'staff' THEN 'pos-staff' ELSE role END,
+                           active, created_at
+                    FROM _staff_accounts_old
+            """)
+            conn.execute("DROP TABLE _staff_accounts_old")
 
 def seed_admin():
     with db_conn() as conn:
@@ -182,6 +212,16 @@ def current_user(session: Optional[str] = Cookie(default=None)):
 def admin_user(user: dict = Depends(current_user)):
     if user["role"] != "admin":
         raise HTTPException(403, "Admin access required")
+
+def cashier_user(user: dict = Depends(current_user)):
+    if user["role"] not in ("cashier", "admin"):
+        raise HTTPException(403, "Cashier access required")
+    return user
+
+def pos_user(user: dict = Depends(current_user)):
+    if user["role"] not in ("pos-staff", "admin"):
+        raise HTTPException(403, "POS staff access required")
+    return user
     return user
 
 # ---------------------------------------------------------------------------
@@ -191,6 +231,7 @@ def admin_user(user: dict = Depends(current_user)):
 @asynccontextmanager
 async def lifespan(app):
     init_db()
+    migrate_db()
     seed_admin()
     refresh_settings()
     yield
@@ -257,7 +298,7 @@ class StaffAccountCreate(BaseModel):
     name:     str
     username: str
     password: str
-    role:     str = "staff"
+    role:     str = "pos-staff"
 
 class StaffAccountUpdate(BaseModel):
     name:     Optional[str]  = None
@@ -409,7 +450,7 @@ def list_members(q: Optional[str] = None, user: dict = Depends(current_user)):
         return result
 
 @app.post("/topup")
-def topup(body: TopupRequest, user: dict = Depends(current_user)):
+def topup(body: TopupRequest, user: dict = Depends(cashier_user)):
     s = _settings
     if body.amount < s["min_topup"]:
         raise HTTPException(400, f"Minimum top-up is {format_amount(s['min_topup'])}")
@@ -427,7 +468,7 @@ def topup(body: TopupRequest, user: dict = Depends(current_user)):
         return {"ok": True, "entry_id": eid, "new_balance": bal, "new_balance_display": format_amount(bal)}
 
 @app.post("/charge")
-def charge(body: ChargeRequest, user: dict = Depends(current_user)):
+def charge(body: ChargeRequest, user: dict = Depends(pos_user)):
     s = _settings
     if body.amount <= 0:
         raise HTTPException(400, "Amount must be positive")
@@ -673,8 +714,8 @@ def list_staff_accounts(user: dict = Depends(admin_user)):
 
 @app.post("/admin/staff-accounts")
 def create_staff_account(body: StaffAccountCreate, user: dict = Depends(admin_user)):
-    if body.role not in ("staff", "admin"):
-        raise HTTPException(400, "Role must be 'staff' or 'admin'")
+    if body.role not in ("cashier", "pos-staff", "admin"):
+        raise HTTPException(400, "Role must be 'cashier', 'pos-staff', or 'admin'")
     with db_conn() as conn:
         if conn.execute("SELECT id FROM staff_accounts WHERE username=?",
                         (body.username.strip(),)).fetchone():
@@ -702,7 +743,7 @@ def update_staff_account(account_id: int, body: StaffAccountUpdate,
         if body.password is not None:
             updates["password_hash"] = bcrypt.hashpw(body.password.encode(), bcrypt.gensalt()).decode()
         if body.role is not None:
-            if body.role not in ("staff","admin"): raise HTTPException(400, "Invalid role")
+            if body.role not in ("cashier","pos-staff","admin"): raise HTTPException(400, "Invalid role")
             updates["role"] = body.role
         if body.active is not None:
             updates["active"] = 1 if body.active else 0
