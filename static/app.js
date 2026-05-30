@@ -232,8 +232,6 @@ function selectBarMember(id, name, number, balance, balanceDisplay) {
   document.getElementById('barSelected').innerHTML =
     `<strong>${esc(name)}</strong> &nbsp; #${esc(number)} &nbsp; Balance: <span class="${balanceClass(balance)}">${esc(balanceDisplay)}</span>`;
   document.getElementById('barForm').classList.remove('hidden');
-  document.getElementById('barProductSearch').value = '';
-  document.getElementById('barProductResults').innerHTML = '';
   setMsg('barMsg', '', '');
 }
 
@@ -243,44 +241,7 @@ function clearBarSelection() {
   document.getElementById('barAmount').value = '';
   document.getElementById('barPin').value    = '';
   document.getElementById('barNote').value   = '';
-  document.getElementById('barProductSearch').value = '';
-  document.getElementById('barProductResults').innerHTML = '';
   setMsg('barMsg', '', '');
-}
-
-let productTimer = null;
-async function barProductLookup() {
-  clearTimeout(productTimer);
-  productTimer = setTimeout(async () => {
-    const q = document.getElementById('barProductSearch').value.trim();
-    if (!q) { document.getElementById('barProductResults').innerHTML = ''; return; }
-    try {
-      const products = await apiFetch(`/products?q=${encodeURIComponent(q)}`);
-      const div = document.getElementById('barProductResults');
-      if (!products.length) {
-        div.innerHTML = '<div style="color:#888;font-size:.88rem;padding:4px">No products found</div>';
-        return;
-      }
-      div.innerHTML = products.map(p => `
-        <div class="product-item" onclick="selectProduct(${p.price},${p.member_price || p.price},'${esc(p.name)}${p.brand ? ' – ' + esc(p.brand) : ''}')">
-          <div>
-            <strong>${esc(p.name)}</strong>${p.brand ? ` <span style="color:#888">– ${esc(p.brand)}</span>` : ''}
-            ${p.search_tags ? `<div style="font-size:.78rem;color:#aaa">${esc(p.search_tags)}</div>` : ''}
-          </div>
-          <div>
-            <span class="product-price">${esc(p.price_display)}</span>
-            ${p.member_price_display ? `<span style="font-size:.82rem;color:#34d399;margin-left:6px">mbr: ${esc(p.member_price_display)}</span>` : ''}
-          </div>
-        </div>`).join('');
-    } catch (e) { console.error(e); }
-  }, 250);
-}
-
-function selectProduct(price, memberPrice, label) {
-  document.getElementById('barAmount').value = memberPrice;
-  document.getElementById('barNote').value   = label;
-  document.getElementById('barProductResults').innerHTML = '';
-  document.getElementById('barProductSearch').value = '';
 }
 
 async function doCharge() {
