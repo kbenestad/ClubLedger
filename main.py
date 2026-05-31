@@ -803,6 +803,7 @@ def cashier_stats(period: str = "today",
         return f"{sym}{v / div:.2f}"
 
     bounds = _period_bounds(period, s, from_date, to_date)
+    start_utc, end_utc = bounds if bounds else (None, None)
 
     with db_conn() as conn:
         credit = conn.execute(
@@ -841,8 +842,8 @@ def cashier_stats(period: str = "today",
         "withdrawals": stat("withdrawal"),
         "charges":     stat("charge"),
         "net": {"total": net, "display": fmt(abs(net)), "negative": net < 0},
-        "period_from": start_utc[:10],
-        "period_to":   end_utc[:10],
+        "period_from": start_utc[:10] if start_utc else None,
+        "period_to":   end_utc[:10]   if end_utc   else None,
     }
 
 @app.get("/members/{member_id}/transactions")
