@@ -161,9 +161,12 @@
 
     <div id="cashierForm" class="hidden">
       <div class="selected-member-box" id="cashierSelected"></div>
+      <div class="mode-tabs">
+        <button class="mode-tab active" data-mode="topup" type="button" onclick="setCashierMode('topup')">Top Up</button>
+        <button class="mode-tab" data-mode="withdrawal" type="button" onclick="setCashierMode('withdrawal')">Withdrawal</button>
+      </div>
 
-      <div class="cashier-action-panel">
-        <h3>Top Up</h3>
+      <div class="cashier-action-panel" id="topupPanel">
         <div class="form-row">
           <label>Amount (<span class="currency-unit"></span>)</label>
           <input type="number" id="cashierAmount" placeholder="e.g. 10.00" min="0.01" step="0.01">
@@ -186,8 +189,7 @@
         <div id="cashierTopupMsg" class="msg"></div>
       </div>
 
-      <div class="cashier-action-panel">
-        <h3>Withdrawal</h3>
+      <div class="cashier-action-panel hidden" id="withdrawalPanel">
         <div class="form-row">
           <label>Amount (<span class="currency-unit"></span>)</label>
           <input type="number" id="withdrawalAmount" placeholder="e.g. 10.00" min="0.01" step="0.01">
@@ -269,123 +271,183 @@
 
   <div class="panel">
     <h2>App Settings</h2>
-    <form id="settingsForm">
+    <div id="settingsMsg" class="msg" style="margin-bottom:8px"></div>
+    <div class="accordion">
 
-      <h3 class="sub-heading">General</h3>
-      <div class="form-row"><label>Club Name</label>
-        <input type="text" id="s-club-name"></div>
-      <div class="form-row"><label>Currency Symbol</label>
-        <input type="text" id="s-currency-symbol" style="max-width:80px"></div>
-      <div class="form-row"><label>Currency Name <span class="label-hint">(major unit, e.g. pounds)</span></label>
-        <input type="text" id="s-currency-major" placeholder="pounds"></div>
-      <div class="form-row"><label>Subunit Name <span class="label-hint">(minor unit, e.g. pence)</span></label>
-        <input type="text" id="s-currency-minor" placeholder="pence"></div>
-      <div class="form-row"><label>Subunits per unit <span class="label-hint">(e.g. 100)</span></label>
-        <input type="number" id="s-currency-divisor" min="1" step="1" style="max-width:100px"></div>
-      <div class="form-row"><label>Minimum top-up <span class="label-hint" id="s-min-hint"></span></label>
-        <input type="number" id="s-min-topup" step="0.01" min="0.01"></div>
-      <div class="form-row"><label>Maximum top-up <span class="label-hint" id="s-max-hint"></span></label>
-        <input type="number" id="s-max-topup" step="0.01"></div>
-      <div class="form-row"><label>Maximum single charge <span class="label-hint" id="s-charge-hint"></span></label>
-        <input type="number" id="s-max-charge" step="0.01"></div>
-      <div class="form-row">
-        <label>Overdraft (bar charges)</label>
-        <select id="s-overdraft-policy">
-          <option value="never">Not allowed</option>
-          <option value="always">Allowed for all</option>
-          <option value="staff_override">Default not allowed &mdash; staff may override per charge</option>
-          <option value="admin_override">Default not allowed &mdash; admin may override per charge</option>
-          <option value="staff_block">Default allowed &mdash; staff may block per charge</option>
-        </select>
+      <div class="acc-item">
+        <button class="acc-header" type="button" onclick="toggleAcc(this)" aria-expanded="false">
+          <span>General</span>
+          <span class="material-symbols-outlined acc-chevron">expand_more</span>
+        </button>
+        <div class="acc-body hidden">
+          <div class="form-row"><label>Club Name</label>
+            <input type="text" id="s-club-name"></div>
+          <div class="form-row"><label>Currency Symbol</label>
+            <input type="text" id="s-currency-symbol" style="max-width:80px"></div>
+          <div class="form-row"><label>Currency Name <span class="label-hint">(major unit, e.g. pounds)</span></label>
+            <input type="text" id="s-currency-major" placeholder="pounds"></div>
+          <div class="form-row"><label>Subunit Name <span class="label-hint">(minor unit, e.g. pence)</span></label>
+            <input type="text" id="s-currency-minor" placeholder="pence"></div>
+          <div class="form-row"><label>Subunits per unit <span class="label-hint">(e.g. 100)</span></label>
+            <input type="number" id="s-currency-divisor" min="1" step="1" style="max-width:100px"></div>
+          <div class="form-row"><label>Minimum top-up <span class="label-hint" id="s-min-hint"></span></label>
+            <input type="number" id="s-min-topup" step="0.01" min="0.01"></div>
+          <div class="form-row"><label>Maximum top-up <span class="label-hint" id="s-max-hint"></span></label>
+            <input type="number" id="s-max-topup" step="0.01"></div>
+          <div class="form-row"><label>Maximum single charge <span class="label-hint" id="s-charge-hint"></span></label>
+            <input type="number" id="s-max-charge" step="0.01"></div>
+          <div class="form-row">
+            <label>Overdraft (bar charges)</label>
+            <select id="s-overdraft-policy">
+              <option value="never">Not allowed</option>
+              <option value="always">Allowed for all</option>
+              <option value="staff_override">Default not allowed &mdash; staff may override per charge</option>
+              <option value="admin_override">Default not allowed &mdash; admin may override per charge</option>
+              <option value="staff_block">Default allowed &mdash; staff may block per charge</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>Timezone <span class="label-hint">(IANA name, e.g. Europe/London, Asia/Bangkok &mdash; default is server timezone)</span></label>
+            <input type="text" id="s-timezone" list="tz-list" placeholder="e.g. Europe/London" autocomplete="off">
+            <datalist id="tz-list"></datalist>
+          </div>
+          <div class="form-row">
+            <label>Default paper size <span class="label-hint">(for receipts and statements)</span></label>
+            <select id="s-paper-size">
+              <option value="A4">A4</option>
+              <option value="A5">A5</option>
+            </select>
+          </div>
+          <div class="acc-footer">
+            <button class="btn btn-primary" type="button" onclick="saveSettings('generalMsg')">Save</button>
+            <div id="generalMsg" class="msg"></div>
+          </div>
+        </div>
       </div>
-      <div class="form-row">
-        <label>Timezone <span class="label-hint">(IANA name, e.g. Europe/London, Asia/Bangkok &mdash; default is server timezone)</span></label>
-        <input type="text" id="s-timezone" list="tz-list" placeholder="e.g. Europe/London" autocomplete="off">
-        <datalist id="tz-list"></datalist>
+
+      <div class="acc-item">
+        <button class="acc-header" type="button" onclick="toggleAcc(this)" aria-expanded="false">
+          <span>Business Address</span>
+          <span class="material-symbols-outlined acc-chevron">expand_more</span>
+        </button>
+        <div class="acc-body hidden">
+          <div class="form-row"><label>Address line 1</label><input type="text" id="s-biz-address1"></div>
+          <div class="form-row"><label>Address line 2</label><input type="text" id="s-biz-address2"></div>
+          <div class="form-row"><label>Address line 3</label><input type="text" id="s-biz-address3"></div>
+          <div class="form-row"><label>Address line 4</label><input type="text" id="s-biz-address4"></div>
+          <div class="form-row"><label>Country</label><input type="text" id="s-biz-country"></div>
+          <div class="form-row"><label>Phone</label><input type="text" id="s-biz-phone"></div>
+          <div class="form-row"><label>Email</label><input type="text" id="s-biz-email"></div>
+          <div class="form-row"><label>Website</label><input type="text" id="s-biz-website"></div>
+          <div class="acc-footer">
+            <button class="btn btn-primary" type="button" onclick="saveSettings('bizMsg')">Save</button>
+            <div id="bizMsg" class="msg"></div>
+          </div>
+        </div>
       </div>
-      <div class="form-row">
-        <label>Default paper size <span class="label-hint">(for receipts and statements)</span></label>
-        <select id="s-paper-size">
-          <option value="A4">A4</option>
-          <option value="A5">A5</option>
-        </select>
+
+      <div class="acc-item">
+        <button class="acc-header" type="button" onclick="toggleAcc(this)" aria-expanded="false">
+          <span>Branding</span>
+          <span class="material-symbols-outlined acc-chevron">expand_more</span>
+        </button>
+        <div class="acc-body hidden">
+          <div class="form-row">
+            <label>Logo <span class="label-hint">(upload image file)</span></label>
+            <input type="file" id="s-logo-upload" accept="image/*" style="padding:4px 0;border:none;background:none;">
+            <div id="logoUploadMsg" class="msg" style="margin-top:4px"></div>
+          </div>
+          <div class="form-row"><label>Logo URL <span class="label-hint">(or paste URL; upload above sets this automatically)</span></label>
+            <input type="text" id="s-logo-url" placeholder="https://..."></div>
+          <div class="form-row">
+            <label>Logo alignment</label>
+            <select id="s-logo-align">
+              <option value="left">Left</option>
+              <option value="center">Center</option>
+              <option value="right">Right</option>
+            </select>
+          </div>
+          <div class="form-row" style="flex-direction:row;gap:24px;align-items:flex-end">
+            <div style="flex:1"><label>Logo max width (px)</label>
+              <input type="number" id="s-logo-max-width" min="20" step="10" placeholder="200"></div>
+            <div style="flex:1"><label>Logo max height (px)</label>
+              <input type="number" id="s-logo-max-height" min="20" step="10" placeholder="80"></div>
+          </div>
+          <div class="form-row"><label>Bar venue name</label>
+            <input type="text" id="s-bar-name" placeholder="Bar"></div>
+          <div class="form-row"><label>Cashier venue name</label>
+            <input type="text" id="s-cashier-name" placeholder="Cashier"></div>
+          <div class="acc-footer">
+            <button class="btn btn-primary" type="button" onclick="saveSettings('brandingMsg')">Save</button>
+            <div id="brandingMsg" class="msg"></div>
+          </div>
+        </div>
       </div>
 
-      <div class="panel-divider"></div>
-      <h3 class="sub-heading">Business Address</h3>
-      <div class="form-row"><label>Address line 1</label><input type="text" id="s-biz-address1"></div>
-      <div class="form-row"><label>Address line 2</label><input type="text" id="s-biz-address2"></div>
-      <div class="form-row"><label>Address line 3</label><input type="text" id="s-biz-address3"></div>
-      <div class="form-row"><label>Address line 4</label><input type="text" id="s-biz-address4"></div>
-      <div class="form-row"><label>Country</label><input type="text" id="s-biz-country"></div>
-      <div class="form-row"><label>Phone</label><input type="text" id="s-biz-phone"></div>
-      <div class="form-row"><label>Email</label><input type="text" id="s-biz-email"></div>
-      <div class="form-row"><label>Website</label><input type="text" id="s-biz-website"></div>
-
-      <div class="panel-divider"></div>
-      <h3 class="sub-heading">Branding</h3>
-      <div class="form-row">
-        <label>Logo <span class="label-hint">(upload image file)</span></label>
-        <input type="file" id="s-logo-upload" accept="image/*" style="padding:4px 0;border:none;background:none;">
-        <div id="logoUploadMsg" class="msg" style="margin-top:4px"></div>
+      <div class="acc-item">
+        <button class="acc-header" type="button" onclick="toggleAcc(this)" aria-expanded="false">
+          <span>Transactions</span>
+          <span class="material-symbols-outlined acc-chevron">expand_more</span>
+        </button>
+        <div class="acc-body hidden">
+          <div class="form-row"><label>Transaction reference prefix</label>
+            <input type="text" id="s-txn-ref-prefix" placeholder="TXN" style="max-width:120px"></div>
+          <div class="form-row"><label>Transfer types <span class="label-hint">(comma-separated)</span></label>
+            <input type="text" id="s-transfer-types" placeholder="Bank Transfer,Cash,QR"></div>
+          <div class="acc-footer">
+            <button class="btn btn-primary" type="button" onclick="saveSettings('transactionsMsg')">Save</button>
+            <div id="transactionsMsg" class="msg"></div>
+          </div>
+        </div>
       </div>
-      <div class="form-row"><label>Logo URL <span class="label-hint">(or paste URL; upload above sets this automatically)</span></label>
-        <input type="text" id="s-logo-url" placeholder="https://..."></div>
-      <div class="form-row">
-        <label>Logo alignment</label>
-        <select id="s-logo-align">
-          <option value="left">Left</option>
-          <option value="center">Center</option>
-          <option value="right">Right</option>
-        </select>
+
+      <div class="acc-item">
+        <button class="acc-header" type="button" onclick="toggleAcc(this)" aria-expanded="false">
+          <span>Receipt Labels <span class="label-hint">(for localisation)</span></span>
+          <span class="material-symbols-outlined acc-chevron">expand_more</span>
+        </button>
+        <div class="acc-body hidden">
+          <div class="form-row"><label>Receipt title (charge)</label><input type="text" id="s-lbl-receipt" placeholder="RECEIPT"></div>
+          <div class="form-row"><label>Receipt title (top-up)</label><input type="text" id="s-lbl-topup-receipt" placeholder="TOP-UP RECEIPT"></div>
+          <div class="form-row"><label>Receipt title (withdrawal)</label><input type="text" id="s-lbl-withdrawal-receipt" placeholder="WITHDRAWAL RECEIPT"></div>
+          <div class="form-row"><label>Staff label</label><input type="text" id="s-lbl-staff" placeholder="STAFF"></div>
+          <div class="form-row"><label>Transaction label</label><input type="text" id="s-lbl-transaction" placeholder="TRANSACTION"></div>
+          <div class="form-row"><label>Charge/venue label</label><input type="text" id="s-lbl-charge" placeholder="CHARGE"></div>
+          <div class="form-row"><label>Transaction time label</label><input type="text" id="s-lbl-txn-time" placeholder="TRANSACTION TIME"></div>
+          <div class="form-row"><label>Amount charged label</label><input type="text" id="s-lbl-amount-charged" placeholder="AMOUNT CHARGED"></div>
+          <div class="form-row"><label>Remaining balance label</label><input type="text" id="s-lbl-remaining-balance" placeholder="REMAINING BALANCE"></div>
+          <div class="form-row"><label>Balance transfer section header</label><input type="text" id="s-lbl-balance-transfer" placeholder="BALANCE TRANSFER"></div>
+          <div class="form-row"><label>Amount topped-up label</label><input type="text" id="s-lbl-amount-topup" placeholder="AMOUNT TOPPED-UP"></div>
+          <div class="form-row"><label>Amount withdrawn label</label><input type="text" id="s-lbl-amount-withdrawal" placeholder="AMOUNT WITHDRAWN"></div>
+          <div class="form-row"><label>Transfer type label</label><input type="text" id="s-lbl-transfer-type" placeholder="TRANSFER TYPE"></div>
+          <div class="form-row"><label>Transfer reference label</label><input type="text" id="s-lbl-transfer-ref" placeholder="TRANSFER REFERENCE"></div>
+          <div class="acc-footer">
+            <button class="btn btn-primary" type="button" onclick="saveSettings('labelsMsg')">Save</button>
+            <div id="labelsMsg" class="msg"></div>
+          </div>
+        </div>
       </div>
-      <div class="form-row" style="flex-direction:row;gap:24px;align-items:flex-end">
-        <div style="flex:1"><label>Logo max width (px)</label>
-          <input type="number" id="s-logo-max-width" min="20" step="10" placeholder="200"></div>
-        <div style="flex:1"><label>Logo max height (px)</label>
-          <input type="number" id="s-logo-max-height" min="20" step="10" placeholder="80"></div>
+
+      <div class="acc-item">
+        <button class="acc-header" type="button" onclick="toggleAcc(this)" aria-expanded="false">
+          <span>Receipt Footers</span>
+          <span class="material-symbols-outlined acc-chevron">expand_more</span>
+        </button>
+        <div class="acc-body hidden">
+          <div class="form-row"><label>Footer &mdash; all <span class="label-hint">(fallback for all receipts and statement)</span></label>
+            <textarea id="s-receipt-footer" rows="2" placeholder="Printed at the bottom of every receipt and statement"></textarea></div>
+          <div class="form-row"><label>Footer &mdash; charge receipts <span class="label-hint">(overrides all-footer for bar charges)</span></label>
+            <textarea id="s-receipt-footer-charge" rows="2"></textarea></div>
+          <div class="form-row"><label>Footer &mdash; cashier receipts <span class="label-hint">(overrides all-footer for top-ups and withdrawals)</span></label>
+            <textarea id="s-receipt-footer-cashier" rows="2"></textarea></div>
+          <div class="acc-footer">
+            <button class="btn btn-primary" type="button" onclick="saveSettings('footersMsg')">Save</button>
+            <div id="footersMsg" class="msg"></div>
+          </div>
+        </div>
       </div>
-      <div class="form-row"><label>Bar venue name</label>
-        <input type="text" id="s-bar-name" placeholder="Bar"></div>
-      <div class="form-row"><label>Cashier venue name</label>
-        <input type="text" id="s-cashier-name" placeholder="Cashier"></div>
 
-      <div class="panel-divider"></div>
-      <h3 class="sub-heading">Transactions</h3>
-      <div class="form-row"><label>Transaction reference prefix</label>
-        <input type="text" id="s-txn-ref-prefix" placeholder="TXN" style="max-width:120px"></div>
-      <div class="form-row"><label>Transfer types <span class="label-hint">(comma-separated)</span></label>
-        <input type="text" id="s-transfer-types" placeholder="Bank Transfer,Cash,QR"></div>
-
-      <div class="panel-divider"></div>
-      <h3 class="sub-heading">Receipt Labels <span class="label-hint">(for localisation)</span></h3>
-      <div class="form-row"><label>Receipt title (charge)</label><input type="text" id="s-lbl-receipt" placeholder="RECEIPT"></div>
-      <div class="form-row"><label>Receipt title (top-up)</label><input type="text" id="s-lbl-topup-receipt" placeholder="TOP-UP RECEIPT"></div>
-      <div class="form-row"><label>Receipt title (withdrawal)</label><input type="text" id="s-lbl-withdrawal-receipt" placeholder="WITHDRAWAL RECEIPT"></div>
-      <div class="form-row"><label>Staff label</label><input type="text" id="s-lbl-staff" placeholder="STAFF"></div>
-      <div class="form-row"><label>Transaction label</label><input type="text" id="s-lbl-transaction" placeholder="TRANSACTION"></div>
-      <div class="form-row"><label>Charge/venue label</label><input type="text" id="s-lbl-charge" placeholder="CHARGE"></div>
-      <div class="form-row"><label>Transaction time label</label><input type="text" id="s-lbl-txn-time" placeholder="TRANSACTION TIME"></div>
-      <div class="form-row"><label>Amount charged label</label><input type="text" id="s-lbl-amount-charged" placeholder="AMOUNT CHARGED"></div>
-      <div class="form-row"><label>Remaining balance label</label><input type="text" id="s-lbl-remaining-balance" placeholder="REMAINING BALANCE"></div>
-      <div class="form-row"><label>Balance transfer section header</label><input type="text" id="s-lbl-balance-transfer" placeholder="BALANCE TRANSFER"></div>
-      <div class="form-row"><label>Amount topped-up label</label><input type="text" id="s-lbl-amount-topup" placeholder="AMOUNT TOPPED-UP"></div>
-      <div class="form-row"><label>Amount withdrawn label</label><input type="text" id="s-lbl-amount-withdrawal" placeholder="AMOUNT WITHDRAWN"></div>
-      <div class="form-row"><label>Transfer type label</label><input type="text" id="s-lbl-transfer-type" placeholder="TRANSFER TYPE"></div>
-      <div class="form-row"><label>Transfer reference label</label><input type="text" id="s-lbl-transfer-ref" placeholder="TRANSFER REFERENCE"></div>
-
-      <div class="panel-divider"></div>
-      <h3 class="sub-heading">Receipt Footers</h3>
-      <div class="form-row"><label>Footer &mdash; all <span class="label-hint">(fallback for all receipts and statement)</span></label>
-        <textarea id="s-receipt-footer" rows="2" placeholder="Printed at the bottom of every receipt and statement"></textarea></div>
-      <div class="form-row"><label>Footer &mdash; charge receipts <span class="label-hint">(overrides all-footer for bar charges)</span></label>
-        <textarea id="s-receipt-footer-charge" rows="2"></textarea></div>
-      <div class="form-row"><label>Footer &mdash; cashier receipts <span class="label-hint">(overrides all-footer for top-ups and withdrawals)</span></label>
-        <textarea id="s-receipt-footer-cashier" rows="2"></textarea></div>
-
-      <button type="submit" class="btn btn-primary" style="margin-top:8px">Save Settings</button>
-    </form>
-    <div id="settingsMsg" class="msg"></div>
+    </div>
   </div>
 
   <div class="panel">

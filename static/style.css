@@ -712,3 +712,95 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- Accordion (admin settings) ---- */
+.accordion {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.acc-item {
+  border-bottom: 1px solid var(--border);
+}
+
+.acc-item:last-child {
+  border-bottom: none;
+}
+
+.acc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--canvas-subtle);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .875rem;
+  font-weight: 600;
+  color: var(--fg);
+  text-align: left;
+  transition: background .1s;
+}
+
+.acc-header:hover { background: var(--border-muted); }
+
+.acc-chevron {
+  font-size: 1.25rem;
+  color: var(--fg-muted);
+  transition: transform .2s;
+  flex-shrink: 0;
+}
+
+.acc-body {
+  padding: 16px;
+  background: var(--canvas);
+}
+
+.acc-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+/* ---- Mode tabs (cashier top-up / withdrawal switch) ---- */
+.mode-tabs {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 16px;
+}
+
+.mode-tab {
+  flex: 1;
+  padding: 8px 16px;
+  background: var(--canvas-subtle);
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: .875rem;
+  font-weight: 500;
+  color: var(--fg-muted);
+  transition: background .1s, color .1s;
+}
+
+.mode-tab + .mode-tab {
+  border-left: 1px solid var(--border);
+}
+
+.mode-tab.active {
+  background: var(--canvas);
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.mode-tab:hover:not(.active) {
+  background: var(--canvas);
+  color: var(--fg);
+}

@@ -141,7 +141,6 @@ async function startApp() {
   document.getElementById('registerForm').addEventListener('submit', e => { e.preventDefault(); registerMember(); });
   document.getElementById('editForm').addEventListener('submit', e => { e.preventDefault(); saveEdit(); });
   document.getElementById('editAccountForm').addEventListener('submit', e => { e.preventDefault(); saveEditAccount(); });
-  document.getElementById('settingsForm').addEventListener('submit', e => { e.preventDefault(); saveSettings(); });
   document.getElementById('addAccountForm').addEventListener('submit', e => { e.preventDefault(); addAccount(); });
 
   // Enter-key on search inputs
@@ -367,6 +366,7 @@ function selectCashierMember(id, name, number, balance, balanceDisplay) {
 
 function clearCashierSelection() {
   cashierMember = null;
+  setCashierMode('topup');
   document.getElementById('cashierForm').classList.add('hidden');
   document.getElementById('cashierAmount').value        = '';
   document.getElementById('cashierTransferType').value  = '';
@@ -602,7 +602,24 @@ async function loadAdminSettings() {
 function _sv(id) { return document.getElementById(id).value; }
 function _svt(id) { return _sv(id).trim(); }
 
-async function saveSettings() {
+function toggleAcc(btn) {
+  const body    = btn.closest('.acc-item').querySelector('.acc-body');
+  const chevron = btn.querySelector('.acc-chevron');
+  const opening = body.classList.contains('hidden');
+  body.classList.toggle('hidden');
+  btn.setAttribute('aria-expanded', opening);
+  if (chevron) chevron.style.transform = opening ? 'rotate(180deg)' : '';
+}
+
+function setCashierMode(mode) {
+  document.querySelectorAll('.mode-tab').forEach(t =>
+    t.classList.toggle('active', t.dataset.mode === mode));
+  document.getElementById('topupPanel').classList.toggle('hidden',     mode !== 'topup');
+  document.getElementById('withdrawalPanel').classList.toggle('hidden', mode !== 'withdrawal');
+}
+
+async function saveSettings(msgId) {
+  const _msgId = msgId || 'settingsMsg';
   const div = parseInt(_sv('s-currency-divisor'), 10) || 100;
   const body = {
     // General
@@ -661,13 +678,13 @@ async function saveSettings() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body)
     });
-    setMsg('settingsMsg', 'Settings saved.', 'ok');
+    setMsg(_msgId, 'Saved.', 'ok');
     await loadConfig();
     populateTransferTypes();
     document.querySelectorAll('.currency-unit').forEach(el => { el.textContent = cfg.currency_major || cfg.currency_unit; });
     if (document.getElementById('navBrand'))
       document.getElementById('navBrand').textContent = cfg.club_name;
-  } catch (err) { setMsg('settingsMsg', err.message, 'err'); }
+  } catch (err) { setMsg(_msgId, err.message, 'err'); }
 }
 
 // Staff accounts table
