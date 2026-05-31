@@ -128,7 +128,8 @@ async function startApp() {
       btn.classList.add('active');
       document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
       document.getElementById('view-' + btn.dataset.view).classList.remove('hidden');
-      if (btn.dataset.view === 'admin') loadAdminView();
+      if (btn.dataset.view === 'admin')   loadAdminView();
+      if (btn.dataset.view === 'cashier') loadCashierStats();
       // Close mobile menu after selection
       navTabs.classList.remove('open');
       hamburger.setAttribute('aria-expanded', 'false');
@@ -149,6 +150,10 @@ async function startApp() {
   document.getElementById('barSearch').addEventListener('keydown',     e => { if (e.key === 'Enter') barSearchMembers(); });
 
   searchMembers();
+  // Pre-load cashier stats if current user can see the cashier tab
+  if (currentUser.role === 'cashier' || currentUser.role === 'admin') {
+    loadCashierStats();
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -282,6 +287,56 @@ async function deleteMember(id, name) {
     await apiFetch(`/members/${id}`, { method: 'DELETE' });
     searchMembers();
   } catch (err) { alert(err.message); }
+}
+
+// ---------------------------------------------------------------------------
+// Cashier stats widgets
+// ---------------------------------------------------------------------------
+function onStatsPeriodChange() {
+  const period = document.getElementById('statsPeriod').value;
+  const custom = document.getElementById('statsCustomRange');
+  if (period === 'custom') {
+    custom.classList.remove('hidden');
+    // default custom range to current month
+    const today = new Date();
+    const y = today.getFullYear(), m = String(today.getMonth()+1).padStart(2,'0');
+    if (!document.getElementById('statsFrom').value)
+      document.getElementById('statsFrom').value = `${y}-${m}-01`;
+    if (!document.getElementById('statsTo').value)
+      document.getElementById('statsTo').value = today.toISOString().slice(0,10);
+  } else {
+    custom.classList.add('hidden');
+    loadCashierStats();
+  }
+}
+
+async function loadCashierStats() {
+  const period = document.getElementById('statsPeriod').value;
+  let url = `/cashier/stats?period=${period}`;
+  if (period === 'custom') {
+    const from = document.getElementById('statsFrom').value;
+    const to   = document.getElementById('statsTo').value;
+    if (!from || !to) return;
+    url += `&from_date=${from}&to_date=${to}`;
+  }
+  try {
+    const d = await apiFetch(url);
+    document.getElementById('statCredit').textContent = d.outstanding_credit_display;
+
+    const setCol = (valId, cntId, stat, cls) => {
+      const el = document.getElementById(valId);
+      el.textContent = stat.display;
+      el.className = 'stats-col-value' + (cls ? ' ' + cls : '');
+      if (cntId) document.getElementById(cntId).textContent =
+        stat.count === 1 ? '1 transaction' : `${stat.count} transactions`;
+    };
+    setCol('statsTopups',      'statsTopupsCount',      d.topups,      'stats-positive');
+    setCol('statsWithdrawals', 'statsWithdrawalsCount', d.withdrawals, 'stats-negative');
+    setCol('statsCharges',     'statsChargesCount',     d.charges,     'stats-negative');
+    const netEl = document.getElementById('statsNet');
+    netEl.textContent = (d.net.negative ? '−' : '+') + d.net.display;
+    netEl.className   = 'stats-col-value ' + (d.net.negative ? 'stats-negative' : 'stats-positive');
+  } catch (e) { /* silently ignore — widgets are non-critical */ }
 }
 
 // ---------------------------------------------------------------------------

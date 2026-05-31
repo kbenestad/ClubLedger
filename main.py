@@ -714,6 +714,103 @@ def withdrawal(body: WithdrawalRequest, user: dict = Depends(cashier_user)):
         new_bal = member_balance(conn, body.member_id)
         return {"ok": True, "entry_id": eid, "new_balance": new_bal, "new_balance_display": format_amount(new_bal)}
 
+# ---------------------------------------------------------------------------
+# Cashier stats
+# ---------------------------------------------------------------------------
+
+def _period_bounds(period: str, s: dict,
+                   from_date: Optional[str] = None,
+                   to_date:   Optional[str] = None):
+    """Return (start_utc_str, end_utc_str) for the requested period."""
+    from datetime import timedelta, date as date_type
+    tz   = _display_tz(s)
+    now  = datetime.now(timezone.utc).astimezone(tz)
+    today = now.date()
+
+    def _local(d: date_type):
+        return datetime(d.year, d.month, d.day, tzinfo=tz)
+
+    if period == "week":
+        start = _local(today - timedelta(days=today.weekday()))   # Monday
+        end   = start + timedelta(days=7)
+    elif period == "month":
+        start = _local(today.replace(day=1))
+        m = today.month % 12 + 1
+        y = today.year + (1 if today.month == 12 else 0)
+        end = _local(date_type(y, m, 1))
+    elif period == "quarter":
+        qm = ((today.month - 1) // 3) * 3 + 1
+        start = _local(date_type(today.year, qm, 1))
+        em, ey = (qm + 3, today.year) if qm <= 9 else (qm - 9, today.year + 1)
+        end = _local(date_type(ey, em, 1))
+    elif period == "year":
+        start = _local(date_type(today.year, 1, 1))
+        end   = _local(date_type(today.year + 1, 1, 1))
+    elif period == "custom" and from_date and to_date:
+        try:
+            fd = date_type.fromisoformat(from_date)
+            td = date_type.fromisoformat(to_date)
+            start = _local(fd)
+            end   = _local(td) + timedelta(days=1)
+        except ValueError:
+            start = _local(today); end = start + timedelta(days=1)
+    else:  # today (default)
+        start = _local(today); end = start + timedelta(days=1)
+
+    fmt = "%Y-%m-%d %H:%M:%S"
+    return (start.astimezone(timezone.utc).strftime(fmt),
+            end.astimezone(timezone.utc).strftime(fmt))
+
+
+@app.get("/cashier/stats")
+def cashier_stats(period: str = "today",
+                  from_date: Optional[str] = None,
+                  to_date:   Optional[str] = None,
+                  user: dict = Depends(cashier_user)):
+    s   = _settings
+    sym = s.get("currency_symbol", "£")
+    div = int(s.get("currency_divisor") or 100)
+
+    def fmt(v: int) -> str:
+        return f"{sym}{v / div:.2f}"
+
+    start_utc, end_utc = _period_bounds(period, s, from_date, to_date)
+
+    with db_conn() as conn:
+        credit = conn.execute(
+            "SELECT COALESCE(SUM(CASE WHEN type='topup' THEN amount ELSE -amount END),0) FROM ledger_entries"
+        ).fetchone()[0]
+
+        rows = conn.execute(
+            """SELECT type, COUNT(*) cnt, COALESCE(SUM(amount),0) total
+               FROM ledger_entries
+               WHERE created_at >= ? AND created_at < ?
+               GROUP BY type""",
+            (start_utc, end_utc)
+        ).fetchall()
+
+    by_type = {r["type"]: {"count": r["cnt"], "total": r["total"]} for r in rows}
+
+    def stat(t):
+        d = by_type.get(t, {"count": 0, "total": 0})
+        return {"count": d["count"], "total": d["total"], "display": fmt(d["total"])}
+
+    tu = by_type.get("topup",      {"total": 0})["total"]
+    wd = by_type.get("withdrawal", {"total": 0})["total"]
+    ch = by_type.get("charge",     {"total": 0})["total"]
+    net = tu - wd - ch
+
+    return {
+        "outstanding_credit":         credit,
+        "outstanding_credit_display": fmt(credit),
+        "topups":      stat("topup"),
+        "withdrawals": stat("withdrawal"),
+        "charges":     stat("charge"),
+        "net": {"total": net, "display": fmt(abs(net)), "negative": net < 0},
+        "period_from": start_utc[:10],
+        "period_to":   end_utc[:10],
+    }
+
 @app.get("/members/{member_id}/transactions")
 def transactions(member_id: int, limit: int = 50, offset: int = 0,
                  user: dict = Depends(current_user)):

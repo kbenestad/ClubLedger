@@ -94,6 +94,58 @@
 
 <!-- ===================== CASHIER VIEW ===================== -->
 <div id="view-cashier" class="view hidden">
+
+  <!-- Stat widgets -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <div class="stat-label">Total outstanding credit</div>
+      <div class="stat-value" id="statCredit">&mdash;</div>
+    </div>
+  </div>
+
+  <div class="panel stats-panel">
+    <div class="stats-header">
+      <h2>Transaction Summary</h2>
+      <div class="stats-period-row">
+        <select id="statsPeriod" onchange="onStatsPeriodChange()">
+          <option value="today">Today</option>
+          <option value="week">This week</option>
+          <option value="month">This month</option>
+          <option value="quarter">This quarter</option>
+          <option value="year">This year</option>
+          <option value="custom">Custom&hellip;</option>
+        </select>
+        <span id="statsCustomRange" class="stats-custom hidden">
+          <input type="date" id="statsFrom">
+          <span>to</span>
+          <input type="date" id="statsTo">
+          <button class="btn" onclick="loadCashierStats()">Go</button>
+        </span>
+      </div>
+    </div>
+    <div id="statsSummary" class="stats-summary">
+      <div class="stats-col">
+        <div class="stats-col-label">Top-ups</div>
+        <div class="stats-col-value" id="statsTopups">&mdash;</div>
+        <div class="stats-col-count" id="statsTopupsCount"></div>
+      </div>
+      <div class="stats-col">
+        <div class="stats-col-label">Withdrawals</div>
+        <div class="stats-col-value" id="statsWithdrawals">&mdash;</div>
+        <div class="stats-col-count" id="statsWithdrawalsCount"></div>
+      </div>
+      <div class="stats-col">
+        <div class="stats-col-label">Charges</div>
+        <div class="stats-col-value" id="statsCharges">&mdash;</div>
+        <div class="stats-col-count" id="statsChargesCount"></div>
+      </div>
+      <div class="stats-col stats-col-net">
+        <div class="stats-col-label">Net</div>
+        <div class="stats-col-value" id="statsNet">&mdash;</div>
+      </div>
+    </div>
+  </div>
+
   <div class="panel">
     <h2>Top Up Account</h2>
     <div class="search-row">
