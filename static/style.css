@@ -43,6 +43,9 @@ nav {
   z-index: 100;
 }
 
+/* On desktop the wrapper is invisible — buttons behave as direct nav children */
+.nav-tabs { display: contents; }
+
 .brand {
   font-size: 1rem;
   font-weight: 600;
@@ -503,4 +506,70 @@ select {
   flex: 2;
   font-size: 1rem;
   padding: 10px 0;
+}
+
+/* ---- Hamburger button (hidden on desktop) ---- */
+.hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid rgba(240,246,252,.3);
+  border-radius: var(--radius);
+  color: var(--nav-text);
+  width: 34px;
+  height: 30px;
+  cursor: pointer;
+  padding: 0;
+  transition: background .1s;
+}
+.hamburger:hover { background: rgba(177,186,196,.15); }
+.hamburger .material-symbols-outlined { font-size: 20px; line-height: 1; }
+
+/* ---- Mobile nav ---- */
+@media (max-width: 640px) {
+  /* Hide desktop tabs, show hamburger */
+  .nav-tabs {
+    display: none;
+    position: fixed;
+    top: 48px;
+    left: 0;
+    right: 0;
+    background: var(--nav-bg);
+    flex-direction: column;
+    padding: 6px 0 10px;
+    border-bottom: 1px solid rgba(240,246,252,.12);
+    box-shadow: 0 8px 16px rgba(0,0,0,.35);
+    z-index: 99;
+  }
+  .nav-tabs.open { display: flex; }
+
+  .hamburger { display: inline-flex; }
+
+  /* Hide username text to save space */
+  .nav-user { display: none; }
+
+  /* Mobile tab items: full-width rows with left accent border */
+  .nav-btn, .nav-link {
+    align-self: auto;
+    width: 100%;
+    padding: 13px 20px;
+    font-size: .9375rem;
+    border-bottom: none;
+    border-left: 3px solid transparent;
+    border-radius: 0;
+    justify-content: flex-start;
+    gap: 12px;
+  }
+  .nav-btn:hover, .nav-link:hover {
+    border-bottom-color: transparent;
+    border-left-color: rgba(240,246,252,.35);
+    background: rgba(177,186,196,.12);
+  }
+  .nav-btn.active, .nav-link.active {
+    border-bottom-color: transparent;
+    border-left-color: #fff;
+    background: rgba(177,186,196,.12);
+  }
+  .nav-icon { font-size: 20px; }
 }

@@ -93,6 +93,23 @@ async function startApp() {
     document.querySelector('[data-view="bar"]').classList.add('hidden');
   }
 
+  // Hamburger menu toggle
+  const hamburger = document.getElementById('hamburger');
+  const navTabs   = document.getElementById('navTabs');
+  hamburger.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = navTabs.classList.toggle('open');
+    hamburger.setAttribute('aria-expanded', open);
+    hamburger.querySelector('.material-symbols-outlined').textContent = open ? 'close' : 'menu';
+  });
+  document.addEventListener('click', e => {
+    if (navTabs.classList.contains('open') && !navTabs.contains(e.target)) {
+      navTabs.classList.remove('open');
+      hamburger.setAttribute('aria-expanded', 'false');
+      hamburger.querySelector('.material-symbols-outlined').textContent = 'menu';
+    }
+  });
+
   // Nav tab switching
   document.querySelectorAll('.nav-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -101,6 +118,10 @@ async function startApp() {
       document.querySelectorAll('.view').forEach(v => v.classList.add('hidden'));
       document.getElementById('view-' + btn.dataset.view).classList.remove('hidden');
       if (btn.dataset.view === 'admin') loadAdminView();
+      // Close mobile menu after selection
+      navTabs.classList.remove('open');
+      hamburger.setAttribute('aria-expanded', 'false');
+      hamburger.querySelector('.material-symbols-outlined').textContent = 'menu';
     });
   });
 

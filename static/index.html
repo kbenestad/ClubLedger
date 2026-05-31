@@ -32,20 +32,25 @@
 <!-- ===================== NAV ===================== -->
 <nav>
   <span class="brand" id="navBrand">ClubLedger</span>
-  <button class="nav-btn active" data-view="members">
-    <span class="material-symbols-outlined nav-icon">group</span>Members
-  </button>
-  <button class="nav-btn" data-view="cashier">
-    <span class="material-symbols-outlined nav-icon">universal_currency_alt</span>Cashier
-  </button>
-  <button class="nav-btn" data-view="bar">
-    <span class="material-symbols-outlined nav-icon">point_of_sale</span>Bar
-  </button>
-  <button class="nav-btn hidden" data-view="admin" id="adminTabBtn">
-    <span class="material-symbols-outlined nav-icon">settings_applications</span>Admin
-  </button>
+  <div class="nav-tabs" id="navTabs">
+    <button class="nav-btn active" data-view="members">
+      <span class="material-symbols-outlined nav-icon">group</span>Members
+    </button>
+    <button class="nav-btn" data-view="cashier">
+      <span class="material-symbols-outlined nav-icon">universal_currency_alt</span>Cashier
+    </button>
+    <button class="nav-btn" data-view="bar">
+      <span class="material-symbols-outlined nav-icon">point_of_sale</span>Bar
+    </button>
+    <button class="nav-btn hidden" data-view="admin" id="adminTabBtn">
+      <span class="material-symbols-outlined nav-icon">settings_applications</span>Admin
+    </button>
+  </div>
   <div class="nav-right">
     <span class="nav-user" id="navUser"></span>
+    <button class="hamburger" id="hamburger" aria-label="Open menu" aria-expanded="false">
+      <span class="material-symbols-outlined">menu</span>
+    </button>
     <button class="nav-logout" onclick="doLogout()">Sign out</button>
   </div>
 </nav>
