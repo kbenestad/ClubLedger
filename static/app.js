@@ -73,10 +73,21 @@ function populateTransferTypes() {
   });
 }
 
+function populateTimezoneList() {
+  const list = document.getElementById('tz-list');
+  if (!list) return;
+  try {
+    list.innerHTML = Intl.supportedValuesOf('timeZone')
+      .map(z => `<option value="${z}">`)
+      .join('');
+  } catch (e) { /* older browser — plain text input still works */ }
+}
+
 async function startApp() {
   document.getElementById('loginOverlay').classList.add('hidden');
   await loadConfig();
   populateTransferTypes();
+  populateTimezoneList();
 
   const brand = document.getElementById('navBrand');
   if (brand) brand.textContent = cfg.club_name;

@@ -243,7 +243,8 @@
       </div>
       <div class="form-row">
         <label>Timezone <span class="label-hint">(IANA name, e.g. Europe/London, Asia/Bangkok &mdash; default is server timezone)</span></label>
-        <input type="text" id="s-timezone" placeholder="e.g. Europe/London">
+        <input type="text" id="s-timezone" list="tz-list" placeholder="e.g. Europe/London" autocomplete="off">
+        <datalist id="tz-list"></datalist>
       </div>
       <div class="form-row">
         <label>Default paper size <span class="label-hint">(for receipts and statements)</span></label>
