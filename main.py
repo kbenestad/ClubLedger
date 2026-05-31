@@ -308,17 +308,17 @@ def _fmt_dt(dt_str: str, s: dict) -> str:
     try:
         dt_utc = datetime.fromisoformat(dt_str.replace(' ', 'T')).replace(tzinfo=timezone.utc)
         local  = dt_utc.astimezone(_display_tz(s))
-        return local.strftime('%Y-%m-%d %H:%M %Z')
+        return local.strftime('%Y-%m-%d %H:%M')
     except Exception:
-        return dt_str[:16] + ' UTC'
+        return dt_str[:16]
 
 def _now_display(s: dict) -> str:
     """Current time formatted in the configured display timezone."""
     try:
         local = datetime.now(timezone.utc).astimezone(_display_tz(s))
-        return local.strftime('%Y-%m-%d %H:%M %Z')
+        return local.strftime('%Y-%m-%d %H:%M')
     except Exception:
-        return datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+        return datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')
 
 def load_staff() -> list:
     if STAFF_FILE.exists():
