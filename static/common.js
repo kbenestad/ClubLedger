@@ -10,6 +10,10 @@ async function loadConfig() {
     if (brand) brand.textContent = cfg.club_name;
     document.title = document.title.replace('ClubLedger', cfg.club_name);
     document.querySelectorAll('.currency-unit').forEach(el => { el.textContent = cfg.currency_unit; });
+    const barLabel = document.getElementById('navBarLabel');
+    if (barLabel && cfg.bar_name) barLabel.textContent = cfg.bar_name;
+    const cashierLabel = document.getElementById('navCashierLabel');
+    if (cashierLabel && cfg.cashier_name) cashierLabel.textContent = cfg.cashier_name;
   } catch (e) { /* use defaults */ }
 }
 
