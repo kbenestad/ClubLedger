@@ -721,40 +721,68 @@ def withdrawal(body: WithdrawalRequest, user: dict = Depends(cashier_user)):
 def _period_bounds(period: str, s: dict,
                    from_date: Optional[str] = None,
                    to_date:   Optional[str] = None):
-    """Return (start_utc_str, end_utc_str) for the requested period."""
+    """Return (start_utc_str, end_utc_str), or None for 'all' (no filter)."""
     from datetime import timedelta, date as date_type
-    tz   = _display_tz(s)
-    now  = datetime.now(timezone.utc).astimezone(tz)
+
+    if period == "all":
+        return None
+
+    tz    = _display_tz(s)
+    now   = datetime.now(timezone.utc).astimezone(tz)
     today = now.date()
 
     def _local(d: date_type):
         return datetime(d.year, d.month, d.day, tzinfo=tz)
 
-    if period == "week":
-        start = _local(today - timedelta(days=today.weekday()))   # Monday
+    def _next_month(y: int, m: int):
+        return (y, m % 12 + 1) if m < 12 else (y + 1, 1)
+
+    def _prev_month_start(d: date_type) -> date_type:
+        first = d.replace(day=1)
+        return (first - timedelta(days=1)).replace(day=1)
+
+    if period == "today":
+        start = _local(today); end = start + timedelta(days=1)
+    elif period == "week":
+        start = _local(today - timedelta(days=today.weekday()))
         end   = start + timedelta(days=7)
+    elif period == "last_week":
+        mon_this = today - timedelta(days=today.weekday())
+        start = _local(mon_this - timedelta(days=7)); end = _local(mon_this)
     elif period == "month":
         start = _local(today.replace(day=1))
-        m = today.month % 12 + 1
-        y = today.year + (1 if today.month == 12 else 0)
-        end = _local(date_type(y, m, 1))
+        ny, nm = _next_month(today.year, today.month)
+        end = _local(date_type(ny, nm, 1))
+    elif period == "last_month":
+        lm_start = _prev_month_start(today)
+        lm_end   = today.replace(day=1)
+        start = _local(lm_start); end = _local(lm_end)
     elif period == "quarter":
         qm = ((today.month - 1) // 3) * 3 + 1
         start = _local(date_type(today.year, qm, 1))
-        em, ey = (qm + 3, today.year) if qm <= 9 else (qm - 9, today.year + 1)
+        ey, em = _next_month(today.year, qm + 2)
         end = _local(date_type(ey, em, 1))
+    elif period == "last_quarter":
+        qm = ((today.month - 1) // 3) * 3 + 1       # start of this quarter
+        lqm = qm - 3
+        lqy = today.year if lqm > 0 else today.year - 1
+        lqm = lqm if lqm > 0 else lqm + 12
+        start = _local(date_type(lqy, lqm, 1))
+        end   = _local(date_type(today.year, qm, 1))
     elif period == "year":
         start = _local(date_type(today.year, 1, 1))
         end   = _local(date_type(today.year + 1, 1, 1))
+    elif period == "last_year":
+        start = _local(date_type(today.year - 1, 1, 1))
+        end   = _local(date_type(today.year,     1, 1))
     elif period == "custom" and from_date and to_date:
         try:
             fd = date_type.fromisoformat(from_date)
             td = date_type.fromisoformat(to_date)
-            start = _local(fd)
-            end   = _local(td) + timedelta(days=1)
+            start = _local(fd); end = _local(td) + timedelta(days=1)
         except ValueError:
             start = _local(today); end = start + timedelta(days=1)
-    else:  # today (default)
+    else:  # fallback → today
         start = _local(today); end = start + timedelta(days=1)
 
     fmt = "%Y-%m-%d %H:%M:%S"
@@ -774,20 +802,26 @@ def cashier_stats(period: str = "today",
     def fmt(v: int) -> str:
         return f"{sym}{v / div:.2f}"
 
-    start_utc, end_utc = _period_bounds(period, s, from_date, to_date)
+    bounds = _period_bounds(period, s, from_date, to_date)
 
     with db_conn() as conn:
         credit = conn.execute(
             "SELECT COALESCE(SUM(CASE WHEN type='topup' THEN amount ELSE -amount END),0) FROM ledger_entries"
         ).fetchone()[0]
 
-        rows = conn.execute(
-            """SELECT type, COUNT(*) cnt, COALESCE(SUM(amount),0) total
-               FROM ledger_entries
-               WHERE created_at >= ? AND created_at < ?
-               GROUP BY type""",
-            (start_utc, end_utc)
-        ).fetchall()
+        if bounds:
+            rows = conn.execute(
+                """SELECT type, COUNT(*) cnt, COALESCE(SUM(amount),0) total
+                   FROM ledger_entries
+                   WHERE created_at >= ? AND created_at < ?
+                   GROUP BY type""",
+                bounds
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """SELECT type, COUNT(*) cnt, COALESCE(SUM(amount),0) total
+                   FROM ledger_entries GROUP BY type"""
+            ).fetchall()
 
     by_type = {r["type"]: {"count": r["cnt"], "total": r["total"]} for r in rows}
 
@@ -848,7 +882,7 @@ function setSize(s){{
 setSize('{size}');
 </script>"""
 
-def _print_controls(s: dict):
+def _print_controls(s: dict, extra: str = "") -> str:
     size = "A5" if (s.get("paper_size") or "A4").upper() == "A5" else "A4"
     a4_chk = ' checked' if size == "A4" else ''
     a5_chk = ' checked' if size == "A5" else ''
@@ -856,7 +890,7 @@ def _print_controls(s: dict):
   <span class="size-label">Paper:</span>
   <label><input type="radio" name="ps" value="A4"{a4_chk} onchange="setSize('A4')"> A4</label>
   <label><input type="radio" name="ps" value="A5"{a5_chk} onchange="setSize('A5')"> A5</label>
-  <button class="print-btn" onclick="window.print()">Print</button>
+  {extra}<button class="print-btn" onclick="window.print()">Print</button>
 </div>"""
 
 def _txn_ref(entry_id: int, s: dict) -> str:
@@ -949,16 +983,81 @@ RECEIPT_CSS = """
   .balance-box{margin-top:14px;text-align:right;font-size:11pt;font-weight:bold;}
 """
 
+_STMT_PERIODS = [
+    ("all",          "All time"),
+    ("today",        "Today"),
+    ("week",         "This week"),
+    ("last_week",    "Last week"),
+    ("month",        "This month"),
+    ("last_month",   "Last month"),
+    ("quarter",      "This quarter"),
+    ("last_quarter", "Last quarter"),
+    ("year",         "This year"),
+    ("last_year",    "Last year"),
+    ("custom",       "Custom…"),
+]
+
+def _stmt_period_selector(period: str, from_date: str, to_date: str) -> str:
+    opts = "".join(
+        f'<option value="{v}"{" selected" if v == period else ""}>{lbl}</option>'
+        for v, lbl in _STMT_PERIODS
+    )
+    fd = from_date or ""; td = to_date or ""
+    vis = "inline-flex" if period == "custom" else "none"
+    return (
+        f'<select onchange="stmtPeriod(this.value)" style="margin-right:8px">{opts}</select>'
+        f'<span id="stmtCR" style="display:{vis};align-items:center;gap:4px;margin-right:8px">'
+        f'<input type="date" id="stmtF" value="{fd}">'
+        f'<span>to</span>'
+        f'<input type="date" id="stmtT" value="{td}">'
+        f'<button onclick="stmtGo()" style="margin-left:4px">Go</button>'
+        f'</span>'
+    )
+
+_STMT_SCRIPT = """<script>
+function stmtPeriod(p){
+  if(p==='custom'){document.getElementById('stmtCR').style.display='inline-flex';return;}
+  var u=new URL(window.location.href);
+  u.searchParams.set('period',p);
+  u.searchParams.delete('from_date');u.searchParams.delete('to_date');
+  window.location=u;
+}
+function stmtGo(){
+  var f=document.getElementById('stmtF').value,t=document.getElementById('stmtT').value;
+  if(!f||!t)return;
+  var u=new URL(window.location.href);
+  u.searchParams.set('period','custom');
+  u.searchParams.set('from_date',f);u.searchParams.set('to_date',t);
+  window.location=u;
+}
+</script>"""
+
 @app.get("/members/{member_id}/statement", response_class=HTMLResponse)
-def statement(member_id: int):
+def statement(member_id: int,
+              period:    str = "all",
+              from_date: Optional[str] = None,
+              to_date:   Optional[str] = None):
     s = _settings
+    bounds = _period_bounds(period, s, from_date, to_date)
     with db_conn() as conn:
         member = conn.execute("SELECT * FROM members WHERE id=?", (member_id,)).fetchone()
         if not member: raise HTTPException(404, "Member not found")
-        rows = conn.execute(
-            "SELECT * FROM ledger_entries WHERE member_id=? ORDER BY created_at ASC",
-            (member_id,)
-        ).fetchall()
+        if bounds:
+            opening_bal = conn.execute(
+                """SELECT COALESCE(SUM(CASE WHEN type='topup' THEN amount ELSE -amount END),0)
+                   FROM ledger_entries WHERE member_id=? AND created_at < ?""",
+                (member_id, bounds[0])
+            ).fetchone()[0]
+            rows = conn.execute(
+                "SELECT * FROM ledger_entries WHERE member_id=? AND created_at>=? AND created_at<? ORDER BY created_at ASC",
+                (member_id, bounds[0], bounds[1])
+            ).fetchall()
+        else:
+            opening_bal = 0
+            rows = conn.execute(
+                "SELECT * FROM ledger_entries WHERE member_id=? ORDER BY created_at ASC",
+                (member_id,)
+            ).fetchall()
         bal = member_balance(conn, member_id)
 
     sym, div = s.get("currency_symbol","£"), s.get("currency_divisor",100)
@@ -968,7 +1067,7 @@ def statement(member_id: int):
 
     def fmt(p): return f"{sym}{p/div:.2f}"
 
-    rows_html, running = "", 0
+    rows_html, running = "", opening_bal
     for r in rows:
         txn_ref = _txn_ref(r["id"], s)
         venue   = bar_name if r["venue"] == "bar" else cashier_name
@@ -1008,15 +1107,19 @@ def statement(member_id: int):
         if sub:
             rows_html += f'<tr class="sub-row"><td colspan="7">{sub}</td></tr>'
 
+    period_lbl = dict(_STMT_PERIODS).get(period, period)
+    if period == "custom" and bounds:
+        period_lbl = f"{bounds[0][:10]} to {bounds[1][:10]}"
+
     return f"""<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
 <title>Statement &mdash; {member['name']}</title><style>{RECEIPT_CSS}</style></head><body>
-{_print_controls(s)}
+{_print_controls(s, extra=_stmt_period_selector(period, from_date or '', to_date or ''))}
 {_biz_header_html(s)}
 <hr>
 <h2>Account Statement</h2>
 <div class="stmt-info">
-  Member: <strong>{member['name']}</strong> &mdash; #{member['member_number']} &mdash;
-  Generated: {_now_display(s)}
+  Member: <strong>{member['name']}</strong> &mdash; #{member['member_number']}<br>
+  Period: {period_lbl} &mdash; Generated: {_now_display(s)}
 </div>
 <table><thead><tr>
   <th>Date and Time</th><th>Reference</th><th>Type</th><th>Venue</th>
@@ -1024,6 +1127,7 @@ def statement(member_id: int):
 </tr></thead><tbody>{rows_html}</tbody></table>
 <div class="balance-box">Current Balance: {fmt(bal)}</div>
 {('<div class="footer">' + footer + '</div>') if footer else ''}
+{_STMT_SCRIPT}
 {_print_size_script(s)}</body></html>"""
 
 @app.get("/receipt/{entry_id}", response_class=HTMLResponse)

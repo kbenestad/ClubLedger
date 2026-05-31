@@ -108,11 +108,16 @@
       <h2>Transaction Summary</h2>
       <div class="stats-period-row">
         <select id="statsPeriod" onchange="onStatsPeriodChange()">
+          <option value="all">All time</option>
           <option value="today">Today</option>
           <option value="week">This week</option>
+          <option value="last_week">Last week</option>
           <option value="month">This month</option>
+          <option value="last_month">Last month</option>
           <option value="quarter">This quarter</option>
+          <option value="last_quarter">Last quarter</option>
           <option value="year">This year</option>
+          <option value="last_year">Last year</option>
           <option value="custom">Custom&hellip;</option>
         </select>
         <span id="statsCustomRange" class="stats-custom hidden">
