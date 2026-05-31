@@ -979,7 +979,9 @@ RECEIPT_CSS = """
   th.rnum,td.rnum{text-align:right;padding-right:0;}
   .credit{color:#080;}
   .debit{color:#c00;}
-  .sub-row td{font-size:10pt;color:#555;padding-top:0;border-bottom:none;padding-left:88px;}
+  .has-note td{border-bottom:none;}
+  .sub-row td{font-size:10pt;color:#555;padding-top:1px;padding-bottom:5px;border-bottom:1px solid #e0e0e0;padding-left:12px;}
+  .row-even td{background:#f7f8fa;}
   .balance-box{margin-top:14px;text-align:right;font-size:11pt;font-weight:bold;}
 """
 
@@ -1068,9 +1070,24 @@ def statement(member_id: int,
     def fmt(p): return f"{sym}{p/div:.2f}"
 
     rows_html, running = "", opening_bal
-    for r in rows:
+    for idx, r in enumerate(rows):
         txn_ref = _txn_ref(r["id"], s)
         venue   = bar_name if r["venue"] == "bar" else cashier_name
+
+        # Build sub-row text FIRST so we know whether to add has-note to the main row
+        sub = ""
+        if r["type"] in ("topup", "withdrawal"):
+            tf_type = r["transfer_type"] or ""
+            tf_ref  = r["transfer_ref"]  or ""
+            if tf_type and tf_ref:
+                sub = f"Transfer type: {tf_type} &mdash; {tf_ref}"
+            elif tf_type:
+                sub = f"Transfer type: {tf_type}"
+            elif tf_ref:
+                sub = f"Ref: {tf_ref}"
+        elif r["note"]:
+            sub = r["note"]
+
         if r["type"] == "topup":
             running += r["amount"]
             amt_html = f'<span class="credit">+ {fmt(r["amount"])}</span>'
@@ -1084,28 +1101,18 @@ def statement(member_id: int,
             amt_html = f'<span class="debit">- {fmt(r["amount"])}</span>'
             type_lbl = "Charge"
 
+        stripe  = "row-even" if idx % 2 == 0 else ""
+        classes = " ".join(c for c in [stripe, "has-note" if sub else ""] if c)
+        tr_cls  = f' class="{classes}"' if classes else ""
+
         rows_html += (
-            f"<tr><td>{_fmt_dt(r['created_at'], s)}</td><td>{txn_ref}</td>"
+            f"<tr{tr_cls}><td>{_fmt_dt(r['created_at'], s)}</td><td>{txn_ref}</td>"
             f"<td>{type_lbl}</td><td>{venue}</td><td>{r['staff_name']}</td>"
             f"<td class='rnum'>{amt_html}</td><td class='rnum'>{fmt(running)}</td></tr>"
         )
-
-        # Detail sub-row
-        sub = ""
-        if r["type"] in ("topup","withdrawal"):
-            tf_type = r["transfer_type"] or ""
-            tf_ref  = r["transfer_ref"]  or ""
-            if tf_type and tf_ref:
-                sub = f"Transfer type: {tf_type} &mdash; {tf_ref}"
-            elif tf_type:
-                sub = f"Transfer type: {tf_type}"
-            elif tf_ref:
-                sub = f"Ref: {tf_ref}"
-        elif r["note"]:
-            sub = r["note"]
-
         if sub:
-            rows_html += f'<tr class="sub-row"><td colspan="7">{sub}</td></tr>'
+            sub_cls = ("sub-row " + stripe).strip()
+            rows_html += f'<tr class="{sub_cls}"><td colspan="7">{sub}</td></tr>'
 
     period_lbl = dict(_STMT_PERIODS).get(period, period)
     if period == "custom" and bounds:
