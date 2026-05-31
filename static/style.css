@@ -34,10 +34,10 @@ nav {
   background: var(--nav-bg);
   color: var(--nav-text);
   display: flex;
-  align-items: center;
+  align-items: stretch;
   padding: 0 16px;
   height: 48px;
-  gap: 4px;
+  gap: 0;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -47,51 +47,68 @@ nav {
   font-size: 1rem;
   font-weight: 600;
   color: #fff;
-  margin-right: 12px;
+  margin-right: 16px;
+  padding-right: 16px;
+  border-right: 1px solid rgba(240,246,252,.15);
   white-space: nowrap;
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  align-self: center;
 }
 
 .brand::before {
   content: "";
   display: inline-block;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   background: #fff;
   border-radius: 50%;
-  opacity: .9;
+  opacity: .85;
+  flex-shrink: 0;
 }
 
 .nav-btn, .nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  align-self: stretch;
   background: transparent;
-  border: 1px solid transparent;
-  color: rgba(240,246,252,.7);
-  padding: 0 12px;
-  height: 32px;
-  line-height: 30px;
-  border-radius: var(--radius);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: rgba(240,246,252,.65);
   cursor: pointer;
   font-size: .875rem;
   font-family: inherit;
+  font-weight: 400;
   white-space: nowrap;
   text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  transition: color .1s, background .1s, border-color .1s;
+  transition: color .1s, border-color .1s, background .1s;
 }
 
 .nav-btn:hover, .nav-link:hover {
   color: var(--nav-text);
-  background: rgba(177,186,196,.12);
+  background: rgba(177,186,196,.1);
+  border-bottom-color: rgba(240,246,252,.35);
 }
 
 .nav-btn.active, .nav-link.active {
   color: #fff;
-  background: rgba(177,186,196,.12);
-  border-color: rgba(240,246,252,.3);
   font-weight: 600;
+  border-bottom-color: #fff;
+}
+
+/* Material Symbols inside nav tabs */
+.nav-icon {
+  font-size: 18px;
+  line-height: 1;
+  font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 20;
+  transition: font-variation-settings .1s;
+}
+.nav-btn.active .nav-icon, .nav-link.active .nav-icon {
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 20;
 }
 
 /* ---- Views ---- */
@@ -388,7 +405,7 @@ select {
 .login-sub { text-align: center; color: var(--fg-muted); font-size: .8125rem; margin-bottom: 20px; }
 
 /* ---- Nav right (user + logout) ---- */
-.nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 10px; align-self: center; }
 .nav-user { color: rgba(240,246,252,.7); font-size: .8125rem; }
 .nav-logout {
   background: transparent;

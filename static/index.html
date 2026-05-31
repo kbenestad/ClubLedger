@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ClubLedger</title>
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
 </head>
 <body>
 
@@ -31,10 +32,18 @@
 <!-- ===================== NAV ===================== -->
 <nav>
   <span class="brand" id="navBrand">ClubLedger</span>
-  <button class="nav-btn active" data-view="members">Members</button>
-  <button class="nav-btn" data-view="cashier">Cashier</button>
-  <button class="nav-btn" data-view="bar">Bar</button>
-  <button class="nav-btn hidden" data-view="admin" id="adminTabBtn">Admin</button>
+  <button class="nav-btn active" data-view="members">
+    <span class="material-symbols-outlined nav-icon">group</span>Members
+  </button>
+  <button class="nav-btn" data-view="cashier">
+    <span class="material-symbols-outlined nav-icon">universal_currency_alt</span>Cashier
+  </button>
+  <button class="nav-btn" data-view="bar">
+    <span class="material-symbols-outlined nav-icon">point_of_sale</span>Bar
+  </button>
+  <button class="nav-btn hidden" data-view="admin" id="adminTabBtn">
+    <span class="material-symbols-outlined nav-icon">settings_applications</span>Admin
+  </button>
   <div class="nav-right">
     <span class="nav-user" id="navUser"></span>
     <button class="nav-logout" onclick="doLogout()">Sign out</button>
