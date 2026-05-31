@@ -69,15 +69,13 @@ chmod +x run.sh
 ./run.sh
 ```
 
-**Windows** — open **Command Prompt** or **PowerShell** in the project folder:
+**Windows** — open `run.bat`; atlernatively, open **Command Prompt** or **PowerShell** in the project folder:
 
 ```cmd
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 .venv\Scripts\python main.py
 ```
-
-> On Windows you can also create a `run.bat` file with those three lines so double-clicking it starts the server in future.
 
 The first time it runs, the server prints the default admin credentials to the terminal:
 
@@ -245,6 +243,7 @@ Adjust the paths below to match your actual username and ClubLedger folder:
 </dict>
 </plist>
 ```
+Make sure that `/Users/youruser/ClubLedger/` points to the project directory.
 
 Load it:
 
@@ -271,6 +270,7 @@ Logs are written to `clubledger.log` in the project folder.
 cd /d "C:\Users\YourName\ClubLedger"
 .venv\Scripts\python main.py
 ```
+Make sure that `C:\Users\YourName\ClubLedger"` points to the project directory.
 
 2. Open **Task Scheduler** (search for it in the Start menu).
 3. Click **Create Basic Task…**
