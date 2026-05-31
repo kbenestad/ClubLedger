@@ -1,4 +1,4 @@
-/* ClubLedger – shared helpers */
+/* ClubLedger - shared helpers */
 
 let cfg = { currency_unit: 'pence', currency_symbol: '£', currency_divisor: 100, club_name: 'ClubLedger' };
 

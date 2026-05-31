@@ -1,5 +1,5 @@
 """
-ClubLedger – Store Credit Web App
+ClubLedger - Store Credit Web App
 Hard defaults live in CONFIG below; everything is overridable via the Admin UI.
 """
 
@@ -96,7 +96,7 @@ DB_PATH  = "clubledger.db"
 STAFF_FILE = Path(__file__).parent / "staff.json"
 static_dir = Path(__file__).parent / "static"
 
-# In-memory sessions: token → {user_id, name, role, expires}
+# In-memory sessions: token -> {user_id, name, role, expires}
 _sessions: dict = {}
 
 # Cached settings merged from CONFIG + DB app_settings
@@ -232,7 +232,7 @@ def migrate_db():
             conn.execute("DROP TABLE _ledger_entries_old")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_ledger_member ON ledger_entries(member_id)")
 
-        # --- app_settings: rename allow_negative_balance → overdraft_policy ---
+        # --- app_settings: rename allow_negative_balance -> overdraft_policy ---
         row = conn.execute(
             "SELECT value FROM app_settings WHERE key='allow_negative_balance'"
         ).fetchone()
@@ -260,8 +260,8 @@ def seed_admin():
                 ("Administrator", "admin", pw, "admin")
             )
             print("=" * 60)
-            print("  Default admin created  →  username: admin  password: admin")
-            print("  Change this immediately in the Admin → Staff Accounts area.")
+            print("  Default admin created  ->  username: admin  password: admin")
+            print("  Change this immediately in the Admin -> Staff Accounts area.")
             print("=" * 60)
 
 def refresh_settings():
@@ -782,7 +782,7 @@ def _period_bounds(period: str, s: dict,
             start = _local(fd); end = _local(td) + timedelta(days=1)
         except ValueError:
             start = _local(today); end = start + timedelta(days=1)
-    else:  # fallback → today
+    else:  # fallback -> today
         start = _local(today); end = start + timedelta(days=1)
 
     fmt = "%Y-%m-%d %H:%M:%S"
@@ -869,7 +869,7 @@ def transactions(member_id: int, limit: int = 50, offset: int = 0,
         }
 
 # ---------------------------------------------------------------------------
-# Print views (no auth – opened as new-tab popups)
+# Print views (no auth - opened as new-tab popups)
 # ---------------------------------------------------------------------------
 
 def _print_size_script(s: dict):
@@ -996,7 +996,7 @@ _STMT_PERIODS = [
     ("last_quarter", "Last quarter"),
     ("year",         "This year"),
     ("last_year",    "Last year"),
-    ("custom",       "Custom…"),
+    ("custom",       "Custom&hellip;"),
 ]
 
 def _stmt_period_selector(period: str, from_date: str, to_date: str) -> str:
@@ -1287,7 +1287,7 @@ def remove_staff(name: str, user: dict = Depends(current_user)):
     return {"staff": staff}
 
 # ---------------------------------------------------------------------------
-# Admin – staff accounts
+# Admin - staff accounts
 # ---------------------------------------------------------------------------
 
 @app.get("/admin/staff-accounts")
@@ -1354,7 +1354,7 @@ def delete_staff_account(account_id: int, user: dict = Depends(admin_user)):
         return {"ok": True}
 
 # ---------------------------------------------------------------------------
-# Admin – app settings
+# Admin - app settings
 # ---------------------------------------------------------------------------
 
 @app.get("/admin/settings")
@@ -1379,7 +1379,7 @@ def update_admin_settings(body: AppSettingsUpdate, user: dict = Depends(admin_us
     return _settings
 
 # ---------------------------------------------------------------------------
-# Admin – logo upload
+# Admin - logo upload
 # ---------------------------------------------------------------------------
 
 @app.post("/admin/logo")
@@ -1400,7 +1400,7 @@ async def upload_logo(file: UploadFile = File(...), user: dict = Depends(admin_u
     return {"url": url}
 
 # ---------------------------------------------------------------------------
-# Config (public – loaded by frontend before login screen shows)
+# Config (public - loaded by frontend before login screen shows)
 # ---------------------------------------------------------------------------
 
 @app.get("/config")

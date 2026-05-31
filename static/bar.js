@@ -1,4 +1,4 @@
-/* ClubLedger – bar page */
+/* ClubLedger - bar page */
 
 let barMember = null;
 

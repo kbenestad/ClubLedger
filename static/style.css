@@ -1,4 +1,4 @@
-/* ClubLedger – GitHub-style theme */
+/* ClubLedger - GitHub-style theme */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
@@ -43,7 +43,7 @@ nav {
   z-index: 100;
 }
 
-/* On desktop the wrapper is invisible — buttons behave as direct nav children */
+/* On desktop the wrapper is invisible -- buttons behave as direct nav children */
 .nav-tabs { display: contents; }
 
 .brand {

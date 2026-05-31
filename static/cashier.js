@@ -1,4 +1,4 @@
-/* ClubLedger – cashier page */
+/* ClubLedger - cashier page */
 
 let cashierMember = null;
 

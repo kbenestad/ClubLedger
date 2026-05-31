@@ -1,4 +1,4 @@
-/* ClubLedger – main SPA */
+/* ClubLedger - main SPA */
 
 let currentUser  = null;
 let cashierMember = null;
@@ -7,7 +7,7 @@ let editMemberId  = null;
 let editAccountId = null;
 
 // ---------------------------------------------------------------------------
-// Boot – check session, then either show login or start the app
+// Boot - check session, then either show login or start the app
 // ---------------------------------------------------------------------------
 (async function boot() {
   // Load config first so the login page shows the club name
@@ -80,7 +80,7 @@ function populateTimezoneList() {
     list.innerHTML = Intl.supportedValuesOf('timeZone')
       .map(z => `<option value="${z}">`)
       .join('');
-  } catch (e) { /* older browser — plain text input still works */ }
+  } catch (e) { /* older browser -- plain text input still works */ }
 }
 
 async function startApp() {
@@ -334,9 +334,9 @@ async function loadCashierStats() {
     setCol('statsWithdrawals', 'statsWithdrawalsCount', d.withdrawals, 'stats-negative');
     setCol('statsCharges',     'statsChargesCount',     d.charges,     'stats-negative');
     const netEl = document.getElementById('statsNet');
-    netEl.textContent = (d.net.negative ? '−' : '+') + d.net.display;
+    netEl.textContent = (d.net.negative ? '-' : '+') + d.net.display;
     netEl.className   = 'stats-col-value ' + (d.net.negative ? 'stats-negative' : 'stats-positive');
-  } catch (e) { /* silently ignore — widgets are non-critical */ }
+  } catch (e) { /* silently ignore -- widgets are non-critical */ }
 }
 
 // ---------------------------------------------------------------------------
